@@ -1,4 +1,11 @@
-<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-    <path android:fillColor="#00000000" android:strokeColor="#FFFFFF" android:strokeWidth="5" android:pathData="M54,32a22,22 0,1 1,0 44a22,22 0,1 1,0 -44z" />
-    <path android:fillColor="#00000000" android:strokeColor="#FFFFFF" android:strokeWidth="5" android:strokeLineCap="round" android:pathData="M54,42L54,54L62,60" />
+<?xml version="1.0" encoding="utf-8"?>
+<!-- "Spark P" mark (design/logo/b-symbol.svg): a P with one pixel sparking off. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <group android:scaleX="0.27" android:scaleY="0.27" android:translateX="16.74" android:translateY="20.52">
+        <path android:fillColor="#FFFFFF" android:fillType="evenOdd"
+            android:pathData="M60,36H140A58,58 0,0 1,140 152H104V220H60ZM104,78H136A16,16 0,0 1,136 110H104Z" />
+        <path android:fillColor="#FFFFFF" android:pathData="M196,28L216,48L196,68L176,48Z" />
+    </group>
 </vector>
