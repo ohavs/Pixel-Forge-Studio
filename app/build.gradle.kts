@@ -95,6 +95,9 @@ dependencies {
     implementation("androidx.core:core-ktx:1.17.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.4")
     implementation("com.google.android.gms:play-services-wearable:19.0.0")
+    // Phone widgets (Widget Studio) and Iconify SVG rendering.
+    implementation("androidx.glance:glance-appwidget:1.2.0")
+    implementation("com.caverock:androidsvg-aar:1.4")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2")
     implementation("com.android.tools.build:apksig:8.13.2")
     implementation("com.google.android.wearable.watchface.validator:validator-push-android:1.0.0-alpha09")

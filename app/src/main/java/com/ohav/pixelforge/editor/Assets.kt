@@ -116,7 +116,9 @@ object ImageAssets {
         val bmp = Bitmap.createBitmap(w.roundToInt().coerceAtLeast(1), h.roundToInt().coerceAtLeast(1), Bitmap.Config.ARGB_8888)
         val canvas = android.graphics.Canvas(bmp)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-        if (l.kind == LayerKind.ICON) {
+        if (l.kind == LayerKind.ICON && Iconify.isIconify(l.text)) {
+            Iconify.drawInto(context, canvas, l.text, bmp.width, bmp.height, l.color)
+        } else if (l.kind == LayerKind.ICON) {
             paint.color = l.color.toInt()
             canvas.scale(bmp.width / IconLibrary.VIEWPORT, bmp.height / IconLibrary.VIEWPORT)
             IconLibrary.paths(l.text).forEach { canvas.drawPath(it.asAndroidPath(), paint) }

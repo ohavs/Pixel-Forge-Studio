@@ -26,7 +26,7 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 @Composable
-fun HomeScreen(onSettings: () -> Unit, onWatchFaces: () -> Unit) {
+fun HomeScreen(onSettings: () -> Unit, onWatchFaces: () -> Unit, onWidgets: () -> Unit) {
     Column(
         Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
             .systemBarsPadding().verticalScroll(rememberScrollState()).padding(20.dp),
@@ -40,7 +40,7 @@ fun HomeScreen(onSettings: () -> Unit, onWatchFaces: () -> Unit) {
         Spacer(Modifier.height(24.dp))
         StudioCard("Watch Faces", "עורך פני שעון ל-Galaxy Watch", listOf(Violet, Cyan), true, Modifier.enter(3), onWatchFaces)
         Spacer(Modifier.height(14.dp))
-        StudioCard("Widgets", "ווידג'טים לטלפון · בקרוב", listOf(Color(0xFFFF7A59), Color(0xFFFF3D8B)), false, Modifier.enter(4)) {}
+        StudioCard("Widgets", "ווידג'טים למסך הבית של הטלפון", listOf(Color(0xFFFF7A59), Color(0xFFFF3D8B)), true, Modifier.enter(4), onWidgets)
     }
 }
 

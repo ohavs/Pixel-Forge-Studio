@@ -3,3 +3,5 @@
 -keep class com.google.android.wearable.watchface.validator.** { *; }
 -keep class com.android.apksig.** { *; }
 -dontwarn **
+# AndroidSVG parses element names reflectively in places; keep it whole.
+-keep class com.caverock.androidsvg.** { *; }

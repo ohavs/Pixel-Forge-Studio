@@ -7,13 +7,20 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import java.io.File
 
+/** The two separate studios share one editor; each keeps its own files under filesDir/[dir]. */
+enum class Studio(val title: String, val dir: String) {
+    FACE("פני שעון", "faces"), WIDGET("ווידג'טים", "widgets");
+
+    val starter get() = if (this == FACE) FaceDoc.Starter else WidgetPresets.starter
+}
+
 /**
  * Editor document + undo/redo. [update] changes the doc live (drags, sliders); [commit] records
  * the change as one undo step and autosaves. Discrete actions use [edit], which does both.
  */
-class EditorState(context: Context) {
-    private val file = File(context.filesDir, "faces/current.json")
-    private val savedDir = File(context.filesDir, "faces/saved")
+class EditorState(context: Context, val studio: Studio = Studio.FACE) {
+    private val file = File(context.filesDir, "${studio.dir}/current.json")
+    private val savedDir = File(context.filesDir, "${studio.dir}/saved")
 
     var doc by mutableStateOf(load())
         private set
@@ -54,7 +61,10 @@ class EditorState(context: Context) {
         save()
     }
 
-    fun add(kind: LayerKind, accent: Long) = add(Layer.create(kind, doc.nextId, accent))
+    /** New layer of [kind]; defaults are laid out for the 450 face, so they move to this canvas's centre. */
+    fun add(kind: LayerKind, accent: Long) = add(
+        Layer.create(kind, doc.nextId, accent).let { it.copy(x = it.x + (doc.w - FACE_SIZE) / 2, y = (it.y + (doc.h - FACE_SIZE) / 2).coerceIn(0f, doc.h)) },
+    )
 
     /** Adds [layer] on top (its id is replaced with a fresh one) and selects it. */
     fun add(layer: Layer) {
@@ -65,7 +75,7 @@ class EditorState(context: Context) {
 
     fun duplicate(id: Long) {
         val l = doc.layers.firstOrNull { it.id == id } ?: return
-        add(l.copy(x = (l.x + 16).coerceAtMost(FACE_SIZE), y = (l.y + 16).coerceAtMost(FACE_SIZE), locked = false))
+        add(l.copy(x = (l.x + 16).coerceAtMost(doc.w), y = (l.y + 16).coerceAtMost(doc.h), locked = false))
     }
 
     fun delete(id: Long) {
@@ -105,7 +115,7 @@ class EditorState(context: Context) {
         .mapNotNull { f -> runCatching { SavedFace(f, f.nameWithoutExtension.toLong(), FaceDoc.fromJson(f.readText())) }.getOrNull() }
         .sortedByDescending { it.time }
 
-    private fun load(): FaceDoc = runCatching { FaceDoc.fromJson(file.readText()) }.getOrDefault(FaceDoc.Starter)
+    private fun load(): FaceDoc = runCatching { FaceDoc.fromJson(file.readText()) }.getOrDefault(studio.starter)
 
     private fun save() {
         file.parentFile?.mkdirs()

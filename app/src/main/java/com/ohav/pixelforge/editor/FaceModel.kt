@@ -66,9 +66,9 @@ data class Layer(
 
     /** Uniformly resized by [f] (pinch). ARC's [height] is an angle, so it stays. */
     fun scaled(f: Float): Layer = copy(
-        size = (size * f).coerceIn(4f, 450f),
-        height = if (kind == LayerKind.ARC) height else (height * f).coerceIn(0f, 450f),
-        thickness = (thickness * f).coerceIn(0f, 225f),
+        size = (size * f).coerceIn(4f, 1000f),
+        height = if (kind == LayerKind.ARC) height else (height * f).coerceIn(0f, 1000f),
+        thickness = (thickness * f).coerceIn(0f, 500f),
     )
 
     /** TICKS segments as (outer, inner) points, starting at 12 o'clock. */
@@ -105,18 +105,41 @@ data class Layer(
     }
 }
 
-/** The whole face. Layers are drawn in list order: first is the bottom. */
-data class FaceDoc(val background: Long = 0xFF0E1015, val layers: List<Layer> = emptyList()) {
+/**
+ * A whole design: a watch face (450 x 450, round) or a phone widget ([w] x [h], rounded rect
+ * with [corner]). Layers are drawn in list order: first is the bottom. [background2] != 0 makes
+ * the background a diagonal gradient.
+ */
+data class FaceDoc(
+    val background: Long = 0xFF0E1015,
+    val layers: List<Layer> = emptyList(),
+    val background2: Long = 0,
+    val w: Float = FACE_SIZE,
+    val h: Float = FACE_SIZE,
+    val round: Boolean = true,
+    val corner: Float = 0f,
+) {
     val nextId get() = (layers.maxOfOrNull { it.id } ?: 0) + 1
 
-    fun toJson(): String = JSONObject().put("background", background)
+    fun toJson(): String = JSONObject().put("background", background).put("background2", background2)
+        .put("w", w).put("h", h).put("round", round).put("corner", corner)
         .put("layers", JSONArray().apply { layers.forEach { put(it.toJson()) } }).toString()
+
+    /** Changes the canvas size, keeping layers in the same place relative to the centre. */
+    fun resized(nw: Float, nh: Float): FaceDoc {
+        val dx = (nw - w) / 2; val dy = (nh - h) / 2
+        return copy(w = nw, h = nh, layers = layers.map { it.copy(x = (it.x + dx).coerceIn(0f, nw), y = (it.y + dy).coerceIn(0f, nh)) })
+    }
 
     companion object {
         fun fromJson(s: String): FaceDoc {
             val o = JSONObject(s)
             val arr = o.getJSONArray("layers")
-            return FaceDoc(o.getLong("background"), List(arr.length()) { Layer.fromJson(arr.getJSONObject(it)) })
+            return FaceDoc(
+                o.getLong("background"), List(arr.length()) { Layer.fromJson(arr.getJSONObject(it)) }, o.optLong("background2", 0),
+                o.optDouble("w", FACE_SIZE.toDouble()).toFloat(), o.optDouble("h", FACE_SIZE.toDouble()).toFloat(),
+                o.optBoolean("round", true), o.optDouble("corner", 0.0).toFloat(),
+            )
         }
 
         val Starter = FaceDoc(
@@ -146,6 +169,14 @@ object FaceXml {
         appendLine("""  <Metadata key="CLOCK_TYPE" value="${if (analog) "ANALOG" else "DIGITAL"}"/>""")
         appendLine("""  <Scene backgroundColor="${c(doc.background)}">""")
         appendLine("""    <Variant mode="AMBIENT" target="backgroundColor" value="#ff000000"/>""")
+        if (doc.background2 != 0L) append("""
+    <PartDraw x="0" y="0" width="450" height="450" name="bg">
+      <Variant mode="AMBIENT" target="alpha" value="0"/>
+      <Rectangle x="0" y="0" width="450" height="450">
+        <Fill color="${c(doc.background)}"><LinearGradient startX="0" startY="0" endX="450" endY="450" colors="${c(doc.background)} ${c(doc.background2)}" positions="0 1"/></Fill>
+      </Rectangle>
+    </PartDraw>
+""")
         doc.layers.filter { it.visible && (!it.kind.isImage || it.id in slots) }
             .forEachIndexed { i, l -> append(layer(l, "l$i", slots[l.id] ?: 0)) }
         appendLine("  </Scene>")
@@ -267,78 +298,4 @@ object FaceXml {
     private val Float.i get() = roundToInt()
     private fun c(argb: Long) = "#%08x".format(argb and 0xFFFFFFFF)
     private fun escape(s: String) = s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
-}
-
-/** Ready-made faces shown in the Add tab. */
-object Presets {
-    private fun face(bg: Long, vararg layers: Layer) = FaceDoc(bg, layers.mapIndexed { i, l -> l.copy(id = i + 1L) })
-    private fun l(kind: LayerKind, color: Long, f: Layer.() -> Layer = { this }) = Layer.create(kind, 0, color).copy(color = color).f()
-
-    val all: List<Pair<String, FaceDoc>> = listOf(
-        "Orbit" to FaceDoc.Starter,
-        "Minimal" to face(
-            0xFF000000,
-            l(LayerKind.TIME, 0xFFFFFFFF) { copy(size = 120f, weight = 0) },
-            l(LayerKind.DATE, 0xFFB8BCC8) { copy(y = 300f, size = 26f, weight = 1) },
-        ),
-        "Classic" to face(
-            0xFF0E1015,
-            l(LayerKind.TICKS, 0xFF6B7080) { copy(count = 60, height = 8f, thickness = 2f) },
-            l(LayerKind.TICKS, 0xFFFFFFFF) { copy(count = 12, height = 22f, thickness = 5f) },
-            l(LayerKind.TIME, 0xFFFFFFFF) { copy(size = 84f) },
-            l(LayerKind.DATE, 0xFFFF7A59) { copy(y = 285f, size = 24f) },
-        ),
-        "Activity" to face(
-            0xFF06231F,
-            l(LayerKind.ARC, 0xFF14453D) { copy(size = 200f, thickness = 18f, angle = 0f, height = 360f) },
-            l(LayerKind.ARC, 0xFF2EE59D) { copy(size = 200f, thickness = 18f, angle = 0f, height = 250f) },
-            l(LayerKind.ARC, 0xFF0F3A52) { copy(size = 172f, thickness = 18f, angle = 0f, height = 360f) },
-            l(LayerKind.ARC, 0xFF00C2FF) { copy(size = 172f, thickness = 18f, angle = 0f, height = 180f) },
-            l(LayerKind.TIME, 0xFFFFFFFF) { copy(size = 88f) },
-            l(LayerKind.DATE, 0xFF2EE59D) { copy(y = 285f, size = 24f) },
-        ),
-        "Neon" to face(
-            0xFF1A1033,
-            l(LayerKind.RING, 0xFFFF3D8B) { copy(size = 212f, thickness = 4f) },
-            l(LayerKind.RING, 0xFF00C2FF) { copy(size = 198f, thickness = 2f) },
-            l(LayerKind.TIME, 0xFFFF3D8B) { copy(size = 104f) },
-            l(LayerKind.TEXT, 0xFF00C2FF) { copy(y = 125f, size = 22f, text = "NEON") },
-            l(LayerKind.DATE, 0xFFFFFFFF) { copy(y = 295f, size = 24f) },
-        ),
-        "Sport" to face(
-            0xFF2B0F16,
-            l(LayerKind.TICKS, 0xFFFF7A59) { copy(count = 60, height = 14f, thickness = 3f) },
-            l(LayerKind.RECT, 0xFFFF7A59) { copy(y = 305f, size = 150f, height = 46f, thickness = 23f) },
-            l(LayerKind.TIME, 0xFFFFFFFF) { copy(y = 200f, size = 110f) },
-            l(LayerKind.DATE, 0xFF2B0F16) { copy(y = 305f, size = 26f) },
-        ),
-        "Analog" to face(
-            0xFF0E1015,
-            l(LayerKind.TICKS, 0xFF6B7080) { copy(count = 60, height = 8f, thickness = 2f) },
-            l(LayerKind.TICKS, 0xFFFFFFFF) { copy(count = 12, height = 26f, thickness = 6f) },
-            l(LayerKind.DATE, 0xFF8B7BFF) { copy(x = 320f, y = 225f, size = 22f) },
-            l(LayerKind.HANDS, 0xFFFFFFFF) { copy(color2 = 0xFFFF6A4D) },
-        ),
-        "Gradient" to face(
-            0xFF000000,
-            l(LayerKind.CIRCLE, 0xFF6C5CE7) { copy(y = 225f, size = 225f, color2 = 0xFFFF3D8B) },
-            l(LayerKind.TIME, 0xFFFFFFFF) { copy(size = 100f) },
-            l(LayerKind.DATE, 0xCCFFFFFF) { copy(y = 295f, size = 24f) },
-        ),
-        "Weather" to face(
-            0xFF101C33,
-            l(LayerKind.ARC, 0xFF1E3358) { copy(size = 205f, thickness = 10f, angle = 0f, height = 360f) },
-            l(LayerKind.ARC, 0xFFFFD166) { copy(size = 205f, thickness = 10f, angle = 270f, height = 140f, color2 = 0xFFFF7A59) },
-            l(LayerKind.ICON, 0xFFFFD166) { copy(y = 115f, size = 64f, text = "WbSunny") },
-            l(LayerKind.TIME, 0xFFFFFFFF) { copy(y = 225f, size = 96f) },
-            l(LayerKind.DATE, 0xFF8FB3FF) { copy(y = 310f, size = 24f) },
-        ),
-        "Sunset" to face(
-            0xFF101C33,
-            l(LayerKind.CIRCLE, 0xFFFF7A59) { copy(y = 225f, size = 150f) },
-            l(LayerKind.CIRCLE, 0xFFFFD166) { copy(x = 300f, y = 140f, size = 26f) },
-            l(LayerKind.TIME, 0xFF101C33) { copy(size = 92f) },
-            l(LayerKind.DATE, 0xFFFFFFFF) { copy(y = 390f, size = 24f) },
-        ),
-    )
 }

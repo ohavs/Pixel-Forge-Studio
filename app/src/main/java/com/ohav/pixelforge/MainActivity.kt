@@ -13,6 +13,7 @@ import com.ohav.pixelforge.ui.HomeScreen
 import com.ohav.pixelforge.ui.SettingsScreen
 import com.ohav.pixelforge.ui.StudioTheme
 import com.ohav.pixelforge.ui.EditorScreen
+import com.ohav.pixelforge.editor.Studio
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -29,8 +30,9 @@ class MainActivity : ComponentActivity() {
                 }, label = "screen") { s ->
                     when (s) {
                         "settings" -> SettingsScreen(onBack = { screen = "home" })
-                        "watch" -> EditorScreen(onBack = { screen = "home" })
-                        else -> HomeScreen(onSettings = { screen = "settings" }, onWatchFaces = { screen = "watch" })
+                        "watch" -> EditorScreen(Studio.FACE, onBack = { screen = "home" })
+                        "widgets" -> EditorScreen(Studio.WIDGET, onBack = { screen = "home" })
+                        else -> HomeScreen(onSettings = { screen = "settings" }, onWatchFaces = { screen = "watch" }, onWidgets = { screen = "widgets" })
                     }
                 }
             }
