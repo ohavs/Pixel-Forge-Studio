@@ -9,7 +9,13 @@ plugins {
 // The validator runs in its own classloader: its protobuf/tink versions clash with AGP's.
 val validatorClasspath = configurations.detachedConfiguration(
     dependencies.create("com.google.android.wearable.watchface.validator:validator-push:1.0.0-alpha09"),
-)
+).apply {
+    attributes {
+        attribute(Usage.USAGE_ATTRIBUTE, objects.named(Usage.JAVA_RUNTIME))
+        attribute(Category.CATEGORY_ATTRIBUTE, objects.named(Category.LIBRARY))
+        attribute(TargetJvmEnvironment.TARGET_JVM_ENVIRONMENT_ATTRIBUTE, objects.named(TargetJvmEnvironment.STANDARD_JVM))
+    }
+}
 /** Validates a WFF APK for Watch Face Push and returns its token (shared by :app and :wear). */
 extra["wfToken"] = fun(apk: File, marketplacePackage: String): String {
     val loader = URLClassLoader(validatorClasspath.files.map { it.toURI().toURL() }.toTypedArray(), ClassLoader.getPlatformClassLoader())
