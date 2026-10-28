@@ -1,0 +1,34 @@
+name: Asset libraries
+
+# Mirrors the editor's asset libraries that have no public API (3dicons, Kenney Sci-Fi UI) and
+# builds catalogs (incl. Fluent Emoji 3D) into the `assets` branch; the app downloads on demand.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/assets/**'
+      - '.github/workflows/assets.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install pillow
+      - name: Build
+        run: python tools/assets/build.py out
+      - name: Publish to assets branch
+        if: always()
+        run: |
+          cd out
+          git init -q -b assets
+          git config user.name "assets"; git config user.email "assets@users.noreply.github.com"
+          git add -A && git commit -qm "Assets for ${{ github.sha }}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" assets
