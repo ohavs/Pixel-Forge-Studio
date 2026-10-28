@@ -7,7 +7,7 @@ buildscript {
         maven("https://jitpack.io") { content { includeGroup("com.github.xgouchet") } }
     }
     dependencies {
-        classpath("com.google.android.wearable.watchface.validator:validator-push:1.0.0-alpha10")
+        classpath("com.google.android.wearable.watchface.validator:validator-push:1.0.0-alpha09")
     }
 }
 

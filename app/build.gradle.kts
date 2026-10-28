@@ -96,5 +96,5 @@ dependencies {
     implementation("com.google.android.gms:play-services-wearable:19.0.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2")
     implementation("com.android.tools.build:apksig:8.13.2")
-    implementation("com.google.android.wearable.watchface.validator:validator-push-android:1.0.0-alpha10")
+    implementation("com.google.android.wearable.watchface.validator:validator-push-android:1.0.0-alpha09")
 }
