@@ -1,11 +1,18 @@
 # PROGRESS
 
 ## Now
-שלב 0b — קוד מוכן, Release v1.0.11 (טלפון + `wear-pixel-forge.apk`). ממתין לבדיקה על השעון: התקנת אפליקציית השעון ב-ADB אלחוטי → "מעבדת שעון" בטלפון → "בנה ושלח". אם עובד: לסמן ✅ ולעבור לשלב 1.
-אם נכשל: הודעת השגיאה מוצגת במסך המעבדה (וגם בשעון) — לתקן לפיה.
+שלב 1 (עורך) — רובו בנוי. "Watch Faces" בבית פותח את העורך (`ui/EditorScreen.kt`); מעבדת השעון הוסרה, השליחה לשעון בכפתור בעורך.
+- יש: קנבס עגול חי, גרירה + קווי מרכז, לשוניות הוסף/שכבות/עיצוב, undo/redo, שמירה אוטומטית (`filesDir/faces/current.json`), 10 תבניות.
+- שכבות: שעה (+שניות), תאריך, טקסט, טבעת, קשת, סימונים, מחוגים אנלוגיים, עיגול, מלבן, אייקון (ספריית Material ~80, לפי קטגוריות), תמונה מהגלריה.
+- עיצוב: צבע, אטימות, גרדיאנט, משקל גופן (5), סיבוב, פינות, גדלים.
+- הבא בשלב 1: גלריית פנים שמורות + היסטוריית גרסאות, צביטה לשינוי גודל, שכפול שכבה.
+- 0b עדיין לא נבדק על השעון: להתקין `wear-pixel-forge.apk` בשעון (ADB אלחוטי) → "Watch Faces" → כפתור שליחה. שגיאות מוצגות מתחת לסרגל העליון.
+- לוגו: Orbit Studio (מ-Canva, משוחזר כוקטור: `design/logo/orbit-final/logo.py` מייצר את `ic_fg/ic_bg/ic_mono` בשתי האפליקציות). המשתמש: "בעתיד נשנה". ה-skill `logo-design` הוסר לבקשתו.
 
-ממתין גם: שם חדש **Orbit Studio** (נבחר). בחירת לוגו מ-`design/logo/orbit/preview.png` (A שני גופים במסלול — מומלץ / B טבעת+ריבוע / C חצי עגול-חצי ריבוע) → להחליף `ic_fg.xml` בשתי האפליקציות + שם האפליקציה (`strings.xml`, label בשעון). רינדור: `pip install cairosvg` (בלי זה ה-skill מצייר עיוור); סקריפט תצוגה עגולה: לכתוב מחדש לפי הצורך.
-עדכון בטלפון נכשל ב-1.0.7: ה-updater הישן לוקח את ה-APK הראשון בריליס (היה של השעון). תוקן ב-workflow: הטלפון מועלה ראשון, השעון `wear-pixel-forge.apk` אחריו.
+## עורך — ארכיטקטורה
+- `editor/FaceModel.kt`: `Layer`/`FaceDoc` (JSON) + `FaceXml` (מייצר WFF v1) + `Presets`. פיקסלים של 450.
+- תמונות/אייקונים: בתבנית `custom` יש 24 משבצות `slot_N.png` (PNG 4x4 עם chunk `pfslot`, crunch כבוי). `FaceBuilder` מחליף אותן לפי תוכן ב-PNG שנוצרו בטלפון (`editor/Assets.kt`).
+- בדיקת XML בלי טלפון: `tools/facecheck` (JVM + XSD הרשמי של WFF). Google Maven חסום בקונטיינר — את ה-UI רק CI מקמפל.
 
 ## ארכיטקטורה (0b)
 - `:watchface` — חבילות WFF בלי קוד. flavors: `home` (פני ברירת מחדל שמותקנים עם אפליקציית השעון) ו-`custom` (תבנית שהטלפון משכתב). חתימה: מפתח debug של CI (חייב להיות שונה ממפתח האפליקציה).
@@ -20,11 +27,11 @@
 - כיוון RTL בכל האפליקציה, אבל כל טקסט מתיישר לפי השפה שלו (`TextDirection.Content` ב-`StudioTheme`): עברית לימין, אנגלית לשמאל. טקסט באנגלית שצריך להיצמד לשמאל — `fillMaxWidth`.
 - כיוון עיצובי: דינמי, נקי, הרבה הנפשות (`ui/Motion.kt`).
 - לוגו ישן (יוחלף): "Spark P" (`design/logo/b-symbol.svg`) — P גיאומטרי עם פיקסל שניתז. אייקון adaptive + monochrome בשתי האפליקציות. חלופות ב-`design/logo/`.
-- Skills ב-`.claude/skills`: `logo-design`, `algorithmic-art`, `theme-factory` (Anthropic), `material-3` (hamen), `text-to-lottie` (diffusionstudio — לאנימציות UI בטלפון בלבד; WFF לא מריץ Lottie), `wear-widgets`, `wear-compose-m3`, `glance-canonical-layouts`, `glance-appwidget-updates-and-memory` (רשמיים של Google, android/skills). ל-WFF אין skill פופולרי — רק פרויקטים קהילתיים קטנים. `landing-page-design` (elayadesign) — לא רלוונטי לאפליקציה, לא הותקן. prompt-motion.com — חסום ברשת של הסשן.
+- Skills ב-`.claude/skills` (`logo-design` הוסר): `algorithmic-art`, `theme-factory` (Anthropic), `material-3` (hamen), `text-to-lottie` (diffusionstudio — לאנימציות UI בטלפון בלבד; WFF לא מריץ Lottie), `wear-widgets`, `wear-compose-m3`, `glance-canonical-layouts`, `glance-appwidget-updates-and-memory` (רשמיים של Google, android/skills). ל-WFF אין skill פופולרי — רק פרויקטים קהילתיים קטנים. `landing-page-design` (elayadesign) — לא רלוונטי לאפליקציה, לא הותקן. prompt-motion.com — חסום ברשת של הסשן.
 - CI: לוגים נגישים דרך GitHub MCP (`get_job_logs`).
 
 ## Secrets (שמות בלבד)
 KEYSTORE_BASE64, KEYSTORE_PASSWORD, AI_API_KEY
 
 ## Last session
-2026-10-28: יישור לפי שפה, לוגו חדש, שלב 0b (מודול שעון + Watch Face Push + בנייה על הטלפון). v1.0.11.
+2026-10-28: לוגו Orbit Studio, עורך פני שעון (שלב 1 ברובו), נכסים: אייקונים + תמונות.
