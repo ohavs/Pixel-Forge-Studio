@@ -40,14 +40,8 @@ def words(name):
 
 # --- Kenney UI Pack: Sci-Fi (CC0) -------------------------------------------------------------
 def kenney():
-    page = get("https://kenney.nl/assets/ui-pack-sci-fi").decode("utf-8", "replace")
-    zips = sorted({z if z.startswith("http") else "https://kenney.nl" + z for z in re.findall(r"[\"'](\S+?\.zip)[\"']", page)})
-    if not zips:
-        log("kenney page", len(page), [m for m in re.findall(r'href="([^"]+)"', page) if "download" in m.lower() or "media" in m][:20])
-    log("kenney zips:", zips)
-    if not zips:
-        raise RuntimeError("no zip link on the asset page")
-    z = zipfile.ZipFile(io.BytesIO(get(zips[0], 180)))
+    # The official pack, uploaded once as a release asset (kenney.nl has no direct link).
+    z = zipfile.ZipFile(io.BytesIO(get("https://github.com/ohavs/Pixel-Forge-Studio/releases/download/asset-sources/kenney-scifi.zip", 300)))
     pngs = [n for n in z.namelist() if n.lower().endswith(".png") and "/png/" in ("/" + n.lower()) and "preview" not in n.lower() and "sample" not in n.lower()]
     log("kenney pngs:", len(pngs), pngs[:12])
     groups = {}
