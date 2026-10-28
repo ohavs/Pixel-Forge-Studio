@@ -20,7 +20,7 @@
 - כיוון RTL בכל האפליקציה, אבל כל טקסט מתיישר לפי השפה שלו (`TextDirection.Content` ב-`StudioTheme`): עברית לימין, אנגלית לשמאל. טקסט באנגלית שצריך להיצמד לשמאל — `fillMaxWidth`.
 - כיוון עיצובי: דינמי, נקי, הרבה הנפשות (`ui/Motion.kt`).
 - לוגו: "Spark P" (`design/logo/b-symbol.svg`) — P גיאומטרי עם פיקסל שניתז. אייקון adaptive + monochrome בשתי האפליקציות. חלופות ב-`design/logo/`.
-- Skills: `logo-design` מותקן ב-`.claude/skills`. `landing-page-design` (elayadesign) — לא רלוונטי לאפליקציה, לא הותקן. prompt-motion.com — חסום ברשת של הסשן.
+- Skills ב-`.claude/skills`: `logo-design`, `algorithmic-art`, `theme-factory` (Anthropic), `material-3` (hamen), `text-to-lottie` (diffusionstudio — לאנימציות UI בטלפון בלבד; WFF לא מריץ Lottie), `wear-widgets`, `wear-compose-m3`, `glance-canonical-layouts`, `glance-appwidget-updates-and-memory` (רשמיים של Google, android/skills). ל-WFF אין skill פופולרי — רק פרויקטים קהילתיים קטנים. `landing-page-design` (elayadesign) — לא רלוונטי לאפליקציה, לא הותקן. prompt-motion.com — חסום ברשת של הסשן.
 - CI: לוגים נגישים דרך GitHub MCP (`get_job_logs`).
 
 ## Secrets (שמות בלבד)
