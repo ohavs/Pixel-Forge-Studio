@@ -39,7 +39,7 @@ private fun WatchHome() {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text("Pixel Forge", style = MaterialTheme.typography.titleMedium)
+        Text("Orbit Studio", style = MaterialTheme.typography.titleMedium)
         Text(
             when {
                 error.isNotEmpty() -> error

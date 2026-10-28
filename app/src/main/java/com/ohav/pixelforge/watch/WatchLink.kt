@@ -13,7 +13,7 @@ import kotlin.coroutines.resume
 
 /** Phone ↔ watch over the Wear Data Layer. The watch app answers "/wf/push" with a "/wf/result" message. */
 object WatchLink {
-    /** Name of the connected watch running Pixel Forge, or null. */
+    /** Name of the connected watch running Orbit Studio, or null. */
     suspend fun watchName(context: Context): String? =
         Wearable.getCapabilityClient(context).getCapability("pixelforge_watch", CapabilityClient.FILTER_REACHABLE).await()
             .nodes.firstOrNull()?.displayName

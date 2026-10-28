@@ -32,7 +32,7 @@ fun HomeScreen(onSettings: () -> Unit, onWatchFaces: () -> Unit) {
             .systemBarsPadding().verticalScroll(rememberScrollState()).padding(20.dp),
     ) {
         Row(Modifier.enter(0), verticalAlignment = Alignment.CenterVertically) {
-            Text("PIXEL FORGE", color = Accent, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp, modifier = Modifier.weight(1f))
+            Text("ORBIT STUDIO", color = Accent, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp, modifier = Modifier.weight(1f))
             IconButton(onClick = onSettings) { Icon(Icons.Outlined.Settings, "הגדרות") }
         }
         Text("סטודיו", Modifier.enter(1), fontSize = 38.sp, fontWeight = FontWeight.Bold)
