@@ -10,6 +10,18 @@
 - 0b עדיין לא נבדק על השעון: להתקין `wear-pixel-forge.apk` בשעון (ADB אלחוטי) → "Watch Faces" → כפתור שליחה. שגיאות מוצגות מתחת לסרגל העליון.
 - לוגו: Orbit Studio (מ-Canva, משוחזר כוקטור: `design/logo/orbit-final/logo.py` מייצר את `ic_fg/ic_bg/ic_mono` בשתי האפליקציות). המשתמש: "בעתיד נשנה". ה-skill `logo-design` הוסר לבקשתו.
 
+## נכסים ותבניות (2026-10-28)
+- Iconify (`editor/Iconify.kt`): חיפוש/עיון ב-200K+ אייקונים, 13 ספריות נבחרות (אימוג'י 3D, Noto, מזג אוויר, דגלים, Phosphor…). מזהה שכבה `prefix:name`, SVG נשמר ב-`filesDir/icons`, רינדור AndroidSVG. חד-צבעי (currentColor) נצבע בצבע השכבה; צבעוני נשאר.
+- Iconify חסום ברשת הקונטיינר; npm פתוח → `npm pack @iconify-json/<set>` לבדיקת שמות אייקונים.
+- תבניות (`editor/Presets.kt`): 10 ערכות (`Themes`) × 14 פריסות פני שעון (+10 מקוריות = 150), × 10 פריסות ווידג'ט (100). רקע גרדיאנט (`background2`).
+- facecheck מאמת את כל 151 הפנים מול ה-XSD — עובר.
+
+## Widget Studio (W1)
+- אותו עורך (`EditorScreen(Studio.WIDGET)`), קנבס מלבן מעוגל: 2×2 / 4×2 / 4×4 / 4×1 (`FaceDoc.w/h/round/corner`). ציור משותף: `editor/Render.kt` (`drawDoc`).
+- ווידג'ט היברידי (`widget/StudioWidget.kt`, Glance 1.2.0): כל העיצוב נאפה לתמונה; TIME/DATE = TextClock חי מעל (`res/layout/wclock_0..4` לפי משקל). אין מחוגים בווידג'טים.
+- כל ווידג'ט במסך שומר עיצוב משלו (`widgets/placed/<id>.json`); ווידג'ט חדש לוקח את העיצוב הפתוח. כפתורים: הוספה למסך הבית, עדכון כל הווידג'טים.
+- הבא: מסך הגדרת ווידג'ט (בחירת עיצוב לכל ווידג'ט, reconfigurable), נתונים חיים (סוללה, מזג אוויר), Motion/אפקטים.
+
 ## עורך — ארכיטקטורה
 - `editor/FaceModel.kt`: `Layer`/`FaceDoc` (JSON) + `FaceXml` (מייצר WFF v1) + `Presets`. פיקסלים של 450.
 - תמונות/אייקונים: בתבנית `custom` יש 24 משבצות `slot_N.png` (PNG 4x4 עם chunk `pfslot`, crunch כבוי). `FaceBuilder` מחליף אותן לפי תוכן ב-PNG שנוצרו בטלפון (`editor/Assets.kt`).
@@ -35,4 +47,4 @@
 KEYSTORE_BASE64, KEYSTORE_PASSWORD, AI_API_KEY
 
 ## Last session
-2026-10-28: לוגו Orbit Studio, עורך פני שעון (שלב 1 ברובו), נכסים: אייקונים + תמונות.
+2026-10-28: לוגו, עורך פני שעון, נכסים. אחר כך: Iconify, 150 תבניות פנים, Widget Studio (W1 בנוי).
