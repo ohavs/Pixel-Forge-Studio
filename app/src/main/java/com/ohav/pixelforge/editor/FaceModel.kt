@@ -64,6 +64,13 @@ data class Layer(
         else -> box().let { (w, h) -> abs(px - x) < w / 2 + 8 && abs(py - y) < h / 2 + 8 }
     }
 
+    /** Uniformly resized by [f] (pinch). ARC's [height] is an angle, so it stays. */
+    fun scaled(f: Float): Layer = copy(
+        size = (size * f).coerceIn(4f, 450f),
+        height = if (kind == LayerKind.ARC) height else (height * f).coerceIn(0f, 450f),
+        thickness = (thickness * f).coerceIn(0f, 225f),
+    )
+
     /** TICKS segments as (outer, inner) points, starting at 12 o'clock. */
     fun ticks(): List<Pair<Pair<Float, Float>, Pair<Float, Float>>> = List(count.coerceAtLeast(1)) { i ->
         val a = Math.toRadians(360.0 * i / count - 90)

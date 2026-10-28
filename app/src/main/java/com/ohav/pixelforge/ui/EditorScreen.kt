@@ -12,9 +12,13 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -71,7 +75,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.time.Instant
 import java.time.LocalDateTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.abs
@@ -127,6 +133,7 @@ fun EditorScreen(onBack: () -> Unit) {
             }
             IconButton(onClick = state::undo, enabled = state.canUndo) { Icon(Icons.AutoMirrored.Filled.Undo, "בטל") }
             IconButton(onClick = state::redo, enabled = state.canRedo) { Icon(Icons.AutoMirrored.Filled.Redo, "בצע שוב") }
+            IconButton(onClick = { state.saveCopy(); status = "נשמר בפנים שלי" }) { Icon(Icons.Outlined.Save, "שמור") }
             FilledIconButton(onClick = { send() }, enabled = !busy && watch != null) { Icon(Icons.AutoMirrored.Filled.Send, "שלח לשעון") }
         }
         if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -159,38 +166,39 @@ private fun FaceCanvas(state: EditorState, modifier: Modifier) {
     val images = rememberImages()
     var guideX by remember { mutableStateOf(false) }
     var guideY by remember { mutableStateOf(false) }
-    var dragId by remember { mutableStateOf<Long?>(null) }
 
     Canvas(
         modifier
             .pointerInput(Unit) {
-                detectTapGestures { o ->
+                // One gesture handler: tap selects, one finger moves, two fingers pinch-resize.
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
                     val u = size.width / FACE_SIZE
-                    state.selectedId = state.layerAt(o.x / u, o.y / u)?.id ?: state.selectedId
-                }
-            }
-            .pointerInput(Unit) {
-                detectDragGestures(
-                    onDragStart = { o ->
-                        val u = size.width / FACE_SIZE
-                        val hit = state.layerAt(o.x / u, o.y / u) ?: state.selected?.takeIf { !it.locked && it.visible }
-                        dragId = hit?.id
-                        hit?.let { state.selectedId = it.id }
-                    },
-                    onDragEnd = { dragId = null; guideX = false; guideY = false; state.commit() },
-                    onDragCancel = { dragId = null; guideX = false; guideY = false; state.commit() },
-                ) { change, d ->
-                    val id = dragId ?: return@detectDragGestures
-                    change.consume()
-                    val u = size.width / FACE_SIZE
-                    state.updateLayer(id) { l ->
-                        // Raw position is kept off-model; snap to the centre lines within 6px.
-                        val nx = (l.x + d.x / u).coerceIn(0f, FACE_SIZE)
-                        val ny = (l.y + d.y / u).coerceIn(0f, FACE_SIZE)
-                        guideX = abs(nx - FACE_SIZE / 2) < 6
-                        guideY = abs(ny - FACE_SIZE / 2) < 6
-                        l.copy(x = nx, y = ny)
-                    }
+                    val hit = state.layerAt(down.position.x / u, down.position.y / u)
+                    val id = hit?.id ?: state.selected?.takeIf { !it.locked && it.visible }?.id
+                    var travel = 0f
+                    var moving = false
+                    do {
+                        val event = awaitPointerEvent()
+                        val pan = event.calculatePan()
+                        val zoom = event.calculateZoom()
+                        travel += pan.getDistance()
+                        if (!moving && id != null && (travel > viewConfiguration.touchSlop || zoom != 1f)) {
+                            moving = true; state.selectedId = id
+                        }
+                        if (moving && id != null) {
+                            state.updateLayer(id) { l ->
+                                val nx = (l.x + pan.x / u).coerceIn(0f, FACE_SIZE)
+                                val ny = (l.y + pan.y / u).coerceIn(0f, FACE_SIZE)
+                                guideX = abs(nx - FACE_SIZE / 2) < 6
+                                guideY = abs(ny - FACE_SIZE / 2) < 6
+                                (if (zoom != 1f) l.scaled(zoom) else l).copy(x = nx, y = ny)
+                            }
+                            event.changes.forEach { it.consume() }
+                        }
+                    } while (event.changes.any { it.pressed })
+                    if (moving) state.commit() else hit?.let { state.selectedId = it.id }
+                    guideX = false; guideY = false
                 }
             },
     ) {
@@ -293,10 +301,12 @@ private fun DrawScope.drawFace(doc: FaceDoc, bg: Color, measurer: TextMeasurer, 
 
 /** Static thumbnail of a face (presets). */
 @Composable
-private fun FaceThumb(doc: FaceDoc, modifier: Modifier) {
+private fun FaceThumb(doc: FaceDoc, modifier: Modifier, images: (String) -> ImageBitmap? = { null }) {
     val measurer = rememberTextMeasurer()
-    Canvas(modifier) { drawFace(doc, Color(doc.background), measurer, ThumbTime) { null } }
+    Canvas(modifier) { drawFace(doc, Color(doc.background), measurer, ThumbTime, images) }
 }
+
+private val SavedTime = DateTimeFormatter.ofPattern("d/M HH:mm")
 
 private val ThumbTime = LocalDateTime.of(2026, 10, 28, 10, 8, 32)
 
@@ -322,6 +332,7 @@ private fun LayerKind.icon(): ImageVector = when (this) {
     LayerKind.RECT -> Icons.Outlined.CropSquare
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun AddPanel(state: EditorState, onAdded: () -> Unit) {
     val ctx = LocalContext.current
@@ -334,11 +345,28 @@ private fun AddPanel(state: EditorState, onAdded: () -> Unit) {
             onAdded()
         }
     }
+    val images = rememberImages()
+    if (state.saved.isNotEmpty()) {
+        Text("הפנים שלי · לחיצה ארוכה למחיקה", fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(8.dp))
+        Row(Modifier.horizontalScroll(rememberScrollState()).padding(bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            state.saved.forEachIndexed { i, f ->
+                Column(
+                    Modifier.enter(i).clip(RoundedCornerShape(18.dp))
+                        .combinedClickable(onLongClick = { state.deleteSaved(f) }) { state.open(f) }.padding(4.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    FaceThumb(f.doc, Modifier.size(92.dp), images)
+                    Text(SavedTime.format(Instant.ofEpochMilli(f.time).atZone(ZoneId.systemDefault())), fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                }
+            }
+        }
+    }
     Text("תבניות", fontWeight = FontWeight.SemiBold)
     Spacer(Modifier.height(8.dp))
     Row(Modifier.horizontalScroll(rememberScrollState()).padding(bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Presets.all.forEachIndexed { i, (name, doc) ->
-            Column(Modifier.enter(i).clip(RoundedCornerShape(18.dp)).clickable { state.apply(doc) }.padding(4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(Modifier.enter(i).clip(RoundedCornerShape(18.dp)).clickable { state.replaceWith(doc) }.padding(4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 FaceThumb(doc, Modifier.size(92.dp))
                 Text(name, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
             }
@@ -391,6 +419,7 @@ private fun LayersPanel(state: EditorState) {
             }
             IconButton({ state.move(l.id, 1) }, enabled = i > 0) { Icon(Icons.Filled.KeyboardArrowUp, "למעלה") }
             IconButton({ state.move(l.id, -1) }, enabled = i < layers.lastIndex) { Icon(Icons.Filled.KeyboardArrowDown, "למטה") }
+            IconButton({ state.duplicate(l.id) }) { Icon(Icons.Outlined.ContentCopy, "שכפל") }
             IconButton({ state.delete(l.id) }) { Icon(Icons.Outlined.Delete, "מחק") }
         }
     }

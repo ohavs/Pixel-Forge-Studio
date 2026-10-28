@@ -13,6 +13,7 @@ import java.io.File
  */
 class EditorState(context: Context) {
     private val file = File(context.filesDir, "faces/current.json")
+    private val savedDir = File(context.filesDir, "faces/saved")
 
     var doc by mutableStateOf(load())
         private set
@@ -62,6 +63,11 @@ class EditorState(context: Context) {
         selectedId = l.id
     }
 
+    fun duplicate(id: Long) {
+        val l = doc.layers.firstOrNull { it.id == id } ?: return
+        add(l.copy(x = (l.x + 16).coerceAtMost(FACE_SIZE), y = (l.y + 16).coerceAtMost(FACE_SIZE), locked = false))
+    }
+
     fun delete(id: Long) {
         edit { d -> d.copy(layers = d.layers.filterNot { it.id == id }) }
         if (selectedId == id) selectedId = doc.layers.lastOrNull()?.id
@@ -79,7 +85,25 @@ class EditorState(context: Context) {
     fun layerAt(x: Float, y: Float): Layer? = doc.layers.lastOrNull { it.visible && !it.locked && it.hit(x, y) }
 
     /** Replaces the face with a preset (one undo step). */
-    fun apply(preset: FaceDoc) { edit { preset }; selectedId = doc.layers.lastOrNull()?.id }
+    fun replaceWith(preset: FaceDoc) { edit { preset }; selectedId = doc.layers.lastOrNull()?.id }
+
+    /** Saved faces, newest first. Every save is kept, so the list doubles as version history. */
+    var saved by mutableStateOf(listSaved())
+        private set
+
+    fun saveCopy() {
+        savedDir.mkdirs()
+        File(savedDir, "${System.currentTimeMillis()}.json").writeText(doc.toJson())
+        saved = listSaved()
+    }
+
+    fun open(f: SavedFace) = replaceWith(f.doc)
+
+    fun deleteSaved(f: SavedFace) { f.file.delete(); saved = listSaved() }
+
+    private fun listSaved(): List<SavedFace> = (savedDir.listFiles() ?: emptyArray())
+        .mapNotNull { f -> runCatching { SavedFace(f, f.nameWithoutExtension.toLong(), FaceDoc.fromJson(f.readText())) }.getOrNull() }
+        .sortedByDescending { it.time }
 
     private fun load(): FaceDoc = runCatching { FaceDoc.fromJson(file.readText()) }.getOrDefault(FaceDoc.Starter)
 
@@ -88,3 +112,5 @@ class EditorState(context: Context) {
         file.writeText(doc.toJson())
     }
 }
+
+class SavedFace(val file: File, val time: Long, val doc: FaceDoc)
