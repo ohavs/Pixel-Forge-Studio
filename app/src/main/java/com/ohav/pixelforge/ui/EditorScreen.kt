@@ -35,7 +35,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -138,9 +141,7 @@ fun EditorScreen(onBack: () -> Unit) {
 private fun FaceCanvas(state: EditorState, modifier: Modifier) {
     val measurer = rememberTextMeasurer()
     var now by remember { mutableStateOf(LocalDateTime.now()) }
-    LaunchedEffect(Unit) { while (true) { now = LocalDateTime.now(); delay(1000) } }
-    val time = now.format(DateTimeFormatter.ofPattern("hh:mm"))
-    val date = now.format(DateTimeFormatter.ofPattern("EEE d", Locale.ENGLISH))
+    LaunchedEffect(Unit) { while (true) { now = LocalDateTime.now(); delay(1000L - now.nano / 1_000_000) } }
     val pulse by rememberInfiniteTransition(label = "sel").animateFloat(.45f, 1f, infiniteRepeatable(tween(800), RepeatMode.Reverse), label = "p")
     val bg by animateColorAsState(Color(state.doc.background), tween(350), label = "bg")
     var guideX by remember { mutableStateOf(false) }
@@ -182,14 +183,14 @@ private fun FaceCanvas(state: EditorState, modifier: Modifier) {
     ) {
         val u = size.minDimension / FACE_SIZE
         drawCircle(Color(0xFF2A2D36), radius = size.minDimension / 2 + 6.dp.toPx())
-        drawFace(state.doc, bg, measurer, time, date)
+        drawFace(state.doc, bg, measurer, now)
         val guide = Color(0xFFFF3D8B)
         if (guideX) drawLine(guide, Offset(size.width / 2, 0f), Offset(size.width / 2, size.height), 1.dp.toPx())
         if (guideY) drawLine(guide, Offset(0f, size.height / 2), Offset(size.width, size.height / 2), 1.dp.toPx())
         state.selected?.takeIf { it.visible }?.let { l ->
             val dash = Stroke(1.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 8f)))
             val sel = Color(0xFF00C2FF).copy(alpha = pulse)
-            if (l.kind in listOf(LayerKind.RING, LayerKind.ARC, LayerKind.TICKS, LayerKind.CIRCLE)) {
+            if (l.kind in listOf(LayerKind.RING, LayerKind.ARC, LayerKind.TICKS, LayerKind.HANDS, LayerKind.CIRCLE)) {
                 drawCircle(sel, (l.size + l.thickness / 2 + 6) * u, Offset(l.x * u, l.y * u), style = dash)
             } else {
                 val (w, h) = l.box()
@@ -199,34 +200,56 @@ private fun FaceCanvas(state: EditorState, modifier: Modifier) {
     }
 }
 
-/** Draws [doc] scaled into this (square) draw area, clipped to the watch circle. */
-private fun DrawScope.drawFace(doc: FaceDoc, bg: Color, measurer: TextMeasurer, time: String, date: String) {
+private val Weights = listOf(FontWeight.Thin, FontWeight.Light, FontWeight.Normal, FontWeight.Medium, FontWeight.Bold)
+
+/** Draws [doc] scaled into this (square) draw area, clipped to the watch circle; mirrors [FaceXml]. */
+private fun DrawScope.drawFace(doc: FaceDoc, bg: Color, measurer: TextMeasurer, now: LocalDateTime) {
     val u = size.minDimension / FACE_SIZE
+    val date = now.format(DateTimeFormatter.ofPattern("EEE d", Locale.ENGLISH))
     clipPath(Path().apply { addOval(androidx.compose.ui.geometry.Rect(Offset.Zero, size)) }) {
         drawRect(bg)
         doc.layers.filter { it.visible }.forEach { l ->
             val c = Color(l.color)
             val center = Offset(l.x * u, l.y * u)
+            val r = l.size * u
+            val brush = if (l.color2 == 0L) SolidColor(c) else Brush.linearGradient(
+                listOf(c, Color(l.color2)), Offset(center.x - l.box().first * u / 2, center.y - l.box().second * u / 2),
+                Offset(center.x + l.box().first * u / 2, center.y + l.box().second * u / 2),
+            )
             when (l.kind) {
-                LayerKind.RING -> drawCircle(c, l.size * u, center, style = Stroke(l.thickness * u))
+                LayerKind.RING -> drawCircle(brush, r, center, style = Stroke(l.thickness * u))
                 LayerKind.ARC -> drawArc(
-                    c, l.angle - 90, l.height, false, Offset(center.x - l.size * u, center.y - l.size * u),
-                    Size(2 * l.size * u, 2 * l.size * u), style = Stroke(l.thickness * u, cap = StrokeCap.Round),
+                    brush, l.angle - 90, l.height, false, Offset(center.x - r, center.y - r),
+                    Size(2 * r, 2 * r), style = Stroke(l.thickness * u, cap = StrokeCap.Round),
                 )
                 LayerKind.TICKS -> l.ticks().forEach { (a, b) ->
                     drawLine(c, Offset(a.first * u, a.second * u), Offset(b.first * u, b.second * u), l.thickness * u, StrokeCap.Round)
                 }
-                LayerKind.CIRCLE -> drawCircle(c, l.size * u, center)
-                LayerKind.RECT -> drawRoundRect(
-                    c, Offset(center.x - l.size * u / 2, center.y - l.height * u / 2), Size(l.size * u, l.height * u),
-                    CornerRadius(l.thickness * u),
-                )
+                LayerKind.HANDS -> {
+                    val t = l.thickness * u
+                    val sec = now.second + now.nano / 1e9f
+                    val min = now.minute + sec / 60
+                    fun hand(deg: Float, len: Float, w: Float, col: Color) = rotate(deg, center) {
+                        drawLine(col, Offset(center.x, center.y + w * 1.6f), Offset(center.x, center.y - len), w, StrokeCap.Round)
+                    }
+                    val accent = if (l.color2 == 0L) c else Color(l.color2)
+                    hand((now.hour % 12 + min / 60) * 30, r * .62f, t * 1.15f, c)
+                    hand(min * 6, r, t, c)
+                    if (l.extra) hand(now.second * 6f, r * 1.08f, maxOf(t * .35f, 2f * u), accent)
+                    drawCircle(accent, t * .9f, center)
+                }
+                LayerKind.CIRCLE -> drawCircle(brush, r, center)
+                LayerKind.RECT -> rotate(l.rotation, center) {
+                    drawRoundRect(brush, Offset(center.x - r / 2, center.y - l.height * u / 2), Size(r, l.height * u), CornerRadius(l.thickness * u))
+                }
                 else -> {
-                    val t = measurer.measure(
-                        l.sample(time, date),
-                        TextStyle(color = c, fontSize = (l.size * u).toSp(), fontWeight = if (l.bold) FontWeight.Bold else FontWeight.Normal),
-                    )
-                    drawText(t, topLeft = Offset(center.x - t.size.width / 2f, center.y - t.size.height / 2f))
+                    val text = when (l.kind) {
+                        LayerKind.TIME -> now.format(DateTimeFormatter.ofPattern(if (l.extra) "hh:mm:ss" else "hh:mm"))
+                        LayerKind.DATE -> date
+                        else -> l.text
+                    }
+                    val m = measurer.measure(text, TextStyle(color = c, fontSize = (l.size * u).toSp(), fontWeight = Weights[l.weight.coerceIn(Weights.indices)]))
+                    rotate(l.rotation, center) { drawText(m, topLeft = Offset(center.x - m.size.width / 2f, center.y - m.size.height / 2f)) }
                 }
             }
         }
@@ -237,8 +260,10 @@ private fun DrawScope.drawFace(doc: FaceDoc, bg: Color, measurer: TextMeasurer, 
 @Composable
 private fun FaceThumb(doc: FaceDoc, modifier: Modifier) {
     val measurer = rememberTextMeasurer()
-    Canvas(modifier) { drawFace(doc, Color(doc.background), measurer, "10:08", "WED 28") }
+    Canvas(modifier) { drawFace(doc, Color(doc.background), measurer, ThumbTime) }
 }
+
+private val ThumbTime = LocalDateTime.of(2026, 10, 28, 10, 8, 32)
 
 private fun LayerKind.icon(): ImageVector = when (this) {
     LayerKind.TIME -> Icons.Outlined.Schedule
@@ -247,8 +272,9 @@ private fun LayerKind.icon(): ImageVector = when (this) {
     LayerKind.RING -> Icons.Outlined.RadioButtonUnchecked
     LayerKind.ARC -> Icons.Outlined.DataUsage
     LayerKind.TICKS -> Icons.Outlined.Timer
+    LayerKind.HANDS -> Icons.Outlined.AccessTime
     LayerKind.CIRCLE -> Icons.Filled.Circle
-    LayerKind.RECT -> Icons.Filled.Rectangle
+    LayerKind.RECT -> Icons.Outlined.CropSquare
 }
 
 @Composable
@@ -327,17 +353,24 @@ private fun StylePanel(state: EditorState) {
             )
             Spacer(Modifier.height(8.dp))
         }
-        Swatches("צבע", Palette, l.color, 2) { c -> state.editLayer(l.id) { it.copy(color = c) } }
+        val alpha = (l.color ushr 24 and 0xFF) / 255f
+        Swatches("צבע", Palette, l.color or 0xFF000000, 2) { c -> state.editLayer(l.id) { it.copy(color = withAlpha(c, alpha)) } }
+        LabeledSlider("אטימות", alpha * 100, 5f..100f, state, 2) { v -> state.updateLayer(l.id) { it.copy(color = withAlpha(it.color, v / 100)) } }
+        if (l.kind != LayerKind.TICKS && !l.kind.isText) {
+            val secondLabel = if (l.kind == LayerKind.HANDS) "מחוג שניות" else "גרדיאנט (צבע שני)"
+            Swatches(secondLabel, listOf(0L) + Palette, l.color2, 2) { c -> state.editLayer(l.id) { it.copy(color2 = c) } }
+        }
         val (sizeLabel, range) = when (l.kind) {
             LayerKind.TIME -> "גודל" to 30f..160f
             LayerKind.DATE, LayerKind.TEXT -> "גודל" to 14f..80f
             LayerKind.RING, LayerKind.ARC, LayerKind.TICKS -> "רדיוס" to 20f..225f
+            LayerKind.HANDS -> "אורך" to 40f..225f
             LayerKind.CIRCLE -> "רדיוס" to 4f..225f
             LayerKind.RECT -> "רוחב" to 10f..450f
         }
         LabeledSlider(sizeLabel, l.size, range, state, 3) { v -> state.updateLayer(l.id) { it.copy(size = v) } }
         if (l.kind == LayerKind.RECT) LabeledSlider("גובה", l.height, 6f..450f, state, 4) { v -> state.updateLayer(l.id) { it.copy(height = v) } }
-        if (l.kind in listOf(LayerKind.RING, LayerKind.ARC, LayerKind.TICKS)) {
+        if (l.kind in listOf(LayerKind.RING, LayerKind.ARC, LayerKind.TICKS, LayerKind.HANDS)) {
             LabeledSlider("עובי", l.thickness, 1f..60f, state, 4) { v -> state.updateLayer(l.id) { it.copy(thickness = v) } }
         }
         if (l.kind == LayerKind.ARC) {
@@ -350,9 +383,20 @@ private fun StylePanel(state: EditorState) {
         }
         if (l.kind == LayerKind.RECT) LabeledSlider("פינות", l.thickness, 0f..(minOf(l.size, l.height) / 2), state, 5) { v -> state.updateLayer(l.id) { it.copy(thickness = v) } }
         if (l.kind.isText) {
+            Text("משקל", Modifier.enter(5), fontWeight = FontWeight.SemiBold)
+            Row(Modifier.enter(5).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf("דק", "קל", "רגיל", "בינוני", "עבה").forEachIndexed { i, t ->
+                    FilterChip(l.weight == i, { state.editLayer(l.id) { it.copy(weight = i) } }, { Text(t, fontWeight = Weights[i]) })
+                }
+            }
+        }
+        if (l.kind == LayerKind.TEXT || l.kind == LayerKind.RECT) {
+            LabeledSlider("סיבוב", l.rotation, -180f..180f, state, 5) { v -> state.updateLayer(l.id) { it.copy(rotation = v) } }
+        }
+        if (l.kind == LayerKind.TIME || l.kind == LayerKind.HANDS) {
             Row(Modifier.enter(5), verticalAlignment = Alignment.CenterVertically) {
-                Text("מודגש", Modifier.weight(1f))
-                Switch(l.bold, { b -> state.editLayer(l.id) { it.copy(bold = b) } })
+                Text(if (l.kind == LayerKind.TIME) "הצג שניות" else "מחוג שניות", Modifier.weight(1f))
+                Switch(l.extra, { b -> state.editLayer(l.id) { it.copy(extra = b) } })
             }
         }
         Row(Modifier.enter(6).padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -365,6 +409,8 @@ private fun StylePanel(state: EditorState) {
     Spacer(Modifier.height(14.dp))
     Swatches("רקע", Backgrounds, state.doc.background, 7) { c -> state.edit { it.copy(background = c) } }
 }
+
+private fun withAlpha(c: Long, a: Float): Long = ((a * 255).toLong().coerceIn(0, 255) shl 24) or (c and 0xFFFFFF)
 
 /** Commits the text field's edits as one undo step when it loses focus. */
 private fun Modifier.onDone(state: EditorState) = this.then(
@@ -392,8 +438,10 @@ private fun Swatches(title: String, colors: List<Long>, selected: Long, index: I
                 val ring by animateColorAsState(if (c == selected) MaterialTheme.colorScheme.primary else Color.Transparent, label = "ring")
                 Box(
                     Modifier.size(38.dp).border(3.dp, ring, CircleShape).padding(5.dp).clip(CircleShape)
-                        .background(Color(c)).border(1.dp, Color.White.copy(alpha = .15f), CircleShape).clickable { onPick(c) },
-                )
+                        .background(if (c == 0L) Color.Transparent else Color(c)).border(1.dp, Color.White.copy(alpha = .25f), CircleShape)
+                        .clickable { onPick(c) },
+                    contentAlignment = Alignment.Center,
+                ) { if (c == 0L) Icon(Icons.Outlined.Block, "ללא", Modifier.size(18.dp)) }
             }
         }
     }

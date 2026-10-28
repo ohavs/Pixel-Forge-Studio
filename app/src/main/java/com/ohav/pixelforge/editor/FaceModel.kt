@@ -10,7 +10,7 @@ import kotlin.math.roundToInt
 const val FACE_SIZE = 450f
 
 enum class LayerKind(val title: String) {
-    TIME("שעה"), DATE("תאריך"), TEXT("טקסט"), RING("טבעת"), ARC("קשת"), TICKS("סימונים"), CIRCLE("עיגול"), RECT("מלבן");
+    TIME("שעה"), DATE("תאריך"), TEXT("טקסט"), RING("טבעת"), ARC("קשת"), TICKS("סימונים"), HANDS("מחוגים"), CIRCLE("עיגול"), RECT("מלבן");
     val isText get() = this == TIME || this == DATE || this == TEXT
 }
 
@@ -19,7 +19,9 @@ enum class LayerKind(val title: String) {
  * text kinds, the radius for RING/CIRCLE and the width for RECT; [height] is the RECT height and
  * [thickness] the RING/ARC/TICKS stroke or RECT corner radius. ARC: [angle] start (degrees
  * clockwise from 12 o'clock) and [height] sweep. TICKS: [count] marks of length [height]
- * ending at radius [size]. Colors are ARGB.
+ * ending at radius [size]. HANDS: minute hand of length [size] and width [thickness], [color2]
+ * the second hand. Colors are ARGB (alpha = opacity); [color2] != 0 makes shapes a gradient.
+ * [extra]: seconds for TIME, a second hand for HANDS. [rotation] turns RECT and TEXT.
  */
 data class Layer(
     val id: Long,
@@ -31,7 +33,10 @@ data class Layer(
     val thickness: Float = 0f,
     val color: Long = 0xFFFFFFFF,
     val text: String = "",
-    val bold: Boolean = true,
+    val weight: Int = 4,
+    val color2: Long = 0,
+    val rotation: Float = 0f,
+    val extra: Boolean = false,
     val angle: Float = 0f,
     val count: Int = 12,
     val visible: Boolean = true,
@@ -39,26 +44,19 @@ data class Layer(
 ) {
     val name get() = if (kind == LayerKind.TEXT && text.isNotBlank()) text else kind.title
 
-    /** Sample string shown for text kinds (the watch fills in the real time/date). */
-    fun sample(time: String, date: String) = when (kind) {
-        LayerKind.TIME -> time
-        LayerKind.DATE -> date
-        else -> text
-    }
-
     /** Approximate box size (w, h) for text kinds; real for shapes. */
     fun box(): Pair<Float, Float> = when (kind) {
-        LayerKind.TIME -> size * 2.9f to size * 1.25f
+        LayerKind.TIME -> size * (if (extra) 4.4f else 2.9f) to size * 1.25f
         LayerKind.DATE -> size * 0.62f * 10 to size * 1.3f
         LayerKind.TEXT -> (size * 0.62f * text.length.coerceAtLeast(1) + size * .4f) to size * 1.3f
-        LayerKind.RING, LayerKind.ARC, LayerKind.TICKS, LayerKind.CIRCLE -> size * 2 to size * 2
+        LayerKind.RING, LayerKind.ARC, LayerKind.TICKS, LayerKind.HANDS, LayerKind.CIRCLE -> size * 2 to size * 2
         LayerKind.RECT -> size to height
     }
 
     fun hit(px: Float, py: Float): Boolean = when (kind) {
         LayerKind.RING, LayerKind.ARC -> abs(hypot(px - x, py - y) - size) < thickness / 2 + 18
         LayerKind.TICKS -> abs(hypot(px - x, py - y) - (size - height / 2)) < height / 2 + 14
-        LayerKind.CIRCLE -> hypot(px - x, py - y) < size
+        LayerKind.CIRCLE, LayerKind.HANDS -> hypot(px - x, py - y) < size
         else -> box().let { (w, h) -> abs(px - x) < w / 2 + 8 && abs(py - y) < h / 2 + 8 }
     }
 
@@ -71,13 +69,13 @@ data class Layer(
 
     fun toJson(): JSONObject = JSONObject().put("id", id).put("kind", kind.name).put("x", x).put("y", y)
         .put("size", size).put("height", height).put("thickness", thickness).put("color", color)
-        .put("text", text).put("bold", bold).put("angle", angle).put("count", count).put("visible", visible).put("locked", locked)
+        .put("text", text).put("weight", weight).put("color2", color2).put("rotation", rotation).put("extra", extra).put("angle", angle).put("count", count).put("visible", visible).put("locked", locked)
 
     companion object {
         fun fromJson(o: JSONObject) = Layer(
             o.getLong("id"), LayerKind.valueOf(o.getString("kind")), o.getDouble("x").toFloat(), o.getDouble("y").toFloat(),
             o.getDouble("size").toFloat(), o.optDouble("height", 0.0).toFloat(), o.optDouble("thickness", 0.0).toFloat(),
-            o.getLong("color"), o.optString("text"), o.optBoolean("bold", true), o.optDouble("angle", 0.0).toFloat(), o.optInt("count", 12), o.optBoolean("visible", true), o.optBoolean("locked", false),
+            o.getLong("color"), o.optString("text"), o.optInt("weight", 4), o.optLong("color2", 0), o.optDouble("rotation", 0.0).toFloat(), o.optBoolean("extra", false), o.optDouble("angle", 0.0).toFloat(), o.optInt("count", 12), o.optBoolean("visible", true), o.optBoolean("locked", false),
         )
 
         fun create(kind: LayerKind, id: Long, accent: Long): Layer = when (kind) {
@@ -87,6 +85,7 @@ data class Layer(
             LayerKind.RING -> Layer(id, kind, size = 205f, thickness = 8f, color = accent)
             LayerKind.ARC -> Layer(id, kind, size = 190f, thickness = 14f, angle = 225f, height = 120f, color = accent)
             LayerKind.TICKS -> Layer(id, kind, size = 218f, height = 16f, thickness = 4f, count = 12)
+            LayerKind.HANDS -> Layer(id, kind, size = 170f, thickness = 10f, color2 = accent, extra = true)
             LayerKind.CIRCLE -> Layer(id, kind, y = 340f, size = 22f, color = accent)
             LayerKind.RECT -> Layer(id, kind, y = 340f, size = 140f, height = 44f, thickness = 22f, color = accent)
         }
@@ -123,7 +122,8 @@ object FaceXml {
     fun build(doc: FaceDoc): String = buildString {
         appendLine("""<?xml version="1.0" encoding="utf-8"?>""")
         appendLine("""<WatchFace width="450" height="450" clipShape="CIRCLE">""")
-        appendLine("""  <Metadata key="CLOCK_TYPE" value="DIGITAL"/>""")
+        val analog = doc.layers.any { it.visible && it.kind == LayerKind.HANDS }
+        appendLine("""  <Metadata key="CLOCK_TYPE" value="${if (analog) "ANALOG" else "DIGITAL"}"/>""")
         appendLine("""  <Scene backgroundColor="${c(doc.background)}">""")
         appendLine("""    <Variant mode="AMBIENT" target="backgroundColor" value="#ff000000"/>""")
         doc.layers.filter { it.visible }.forEachIndexed { i, l -> append(layer(l, "l$i")) }
@@ -134,11 +134,11 @@ object FaceXml {
     private fun layer(l: Layer, name: String): String {
         val (w, h) = l.box()
         val bx = (l.x - w / 2).i; val by = (l.y - h / 2).i
-        val font = """<Font family="SYNC_TO_DEVICE" size="${l.size.i}" weight="${if (l.bold) "BOLD" else "NORMAL"}" slant="NORMAL" color="${c(l.color)}">"""
+        val font = """<Font family="SYNC_TO_DEVICE" size="${l.size.i}" weight="${Weights[l.weight.coerceIn(Weights.indices)]}" slant="NORMAL" color="${c(l.color)}">"""
         return when (l.kind) {
             LayerKind.TIME -> """
     <DigitalClock x="$bx" y="$by" width="${w.i}" height="${h.i}">
-      <TimeText x="0" y="0" width="${w.i}" height="${h.i}" format="hh:mm" hourFormat="SYNC_TO_DEVICE" align="CENTER">
+      <TimeText x="0" y="0" width="${w.i}" height="${h.i}" format="${if (l.extra) "hh:mm:ss" else "hh:mm"}" hourFormat="SYNC_TO_DEVICE" align="CENTER">
         ${font.dropLast(1)}/>
       </TimeText>
     </DigitalClock>
@@ -151,7 +151,7 @@ object FaceXml {
     </PartText>
 """
             LayerKind.TEXT -> """
-    <PartText x="$bx" y="$by" width="${w.i}" height="${h.i}" name="$name">
+    <PartText x="$bx" y="$by" width="${w.i}" height="${h.i}" angle="${l.rotation.i}" name="$name">
       <Text align="CENTER" ellipsis="TRUE">
         $font${escape(l.text)}</Font>
       </Text>
@@ -163,7 +163,7 @@ object FaceXml {
                 """
     <PartDraw x="${(l.x - r - t / 2).i}" y="${(l.y - r - t / 2).i}" width="$box" height="$box" name="$name">
       <Ellipse x="${(t / 2).i}" y="${(t / 2).i}" width="${(2 * r).i}" height="${(2 * r).i}">
-        <Stroke color="${c(l.color)}" thickness="${t.i}"/>
+        ${stroke(l, 0f, 0f, box.toFloat(), box.toFloat())}
       </Ellipse>
     </PartDraw>
 """
@@ -171,7 +171,7 @@ object FaceXml {
             LayerKind.ARC -> """
     <PartDraw x="0" y="0" width="450" height="450" name="$name">
       <Arc centerX="${l.x.i}" centerY="${l.y.i}" width="${(2 * l.size).i}" height="${(2 * l.size).i}" startAngle="${l.angle.i}" endAngle="${(l.angle + l.height).i}">
-        <Stroke color="${c(l.color)}" thickness="${l.thickness.i}" cap="ROUND"/>
+        ${stroke(l, l.x - l.size, l.y - l.size, l.x + l.size, l.y + l.size)}
       </Arc>
     </PartDraw>
 """
@@ -183,26 +183,61 @@ object FaceXml {
                     append("""      <Line startX="${a.first.i}" startY="${a.second.i}" endX="${b.first.i}" endY="${b.second.i}"><Stroke color="${c(l.color)}" thickness="${l.thickness.i}" cap="ROUND"/></Line>
 """)
                 }
-                append("    </PartDraw>
-")
+                append("    </PartDraw>\n")
+            }
+            LayerKind.HANDS -> buildString {
+                append(hand(l, "${name}h", "([HOUR_0_11] + [MINUTE] / 60) * 30", l.size * .62f, l.thickness * 1.15f, l.color, false))
+                append(hand(l, "${name}m", "([MINUTE] + [SECOND] / 60) * 6", l.size, l.thickness, l.color, false))
+                if (l.extra) append(hand(l, "${name}s", "[SECOND] * 6", l.size * 1.08f, (l.thickness * .35f).coerceAtLeast(2f), l.color2.takeIf { it != 0L } ?: l.color, true))
+                val r = l.thickness * .9f
+                append("""
+    <PartDraw x="${(l.x - r).i}" y="${(l.y - r).i}" width="${(2 * r).i}" height="${(2 * r).i}" name="${name}c">
+      <Ellipse x="0" y="0" width="${(2 * r).i}" height="${(2 * r).i}"><Fill color="${c(l.color2.takeIf { it != 0L } ?: l.color)}"/></Ellipse>
+    </PartDraw>
+""")
             }
             LayerKind.CIRCLE -> """
     <PartDraw x="$bx" y="$by" width="${w.i}" height="${h.i}" name="$name">
       <Ellipse x="0" y="0" width="${w.i}" height="${h.i}">
-        <Fill color="${c(l.color)}"/>
+        ${fill(l, w, h)}
       </Ellipse>
     </PartDraw>
 """
             LayerKind.RECT -> """
-    <PartDraw x="$bx" y="$by" width="${w.i}" height="${h.i}" name="$name">
+    <PartDraw x="$bx" y="$by" width="${w.i}" height="${h.i}" angle="${l.rotation.i}" name="$name">
       <RoundRectangle x="0" y="0" width="${w.i}" height="${h.i}" cornerRadiusX="${l.thickness.i}" cornerRadiusY="${l.thickness.i}">
-        <Fill color="${c(l.color)}"/>
+        ${fill(l, w, h)}
       </RoundRectangle>
     </PartDraw>
 """
         }
     }
 
+    /** One rotating hand: a rounded bar from a short tail through the pivot to [len]. */
+    private fun hand(l: Layer, name: String, angle: String, len: Float, t: Float, color: Long, hideInAmbient: Boolean): String {
+        val tail = t * 1.6f
+        return """
+    <PartDraw x="${(l.x - 225).i}" y="${(l.y - 225).i}" width="450" height="450" pivotX="0.5" pivotY="0.5" name="$name">
+      <Transform target="angle" value="$angle"/>${if (hideInAmbient) "\n      <Variant mode=\"AMBIENT\" target=\"alpha\" value=\"0\"/>" else ""}
+      <RoundRectangle x="${(225 - t / 2).i}" y="${(225 - len).i}" width="${t.i}" height="${(len + tail).i}" cornerRadiusX="${(t / 2).i}" cornerRadiusY="${(t / 2).i}">
+        <Fill color="${c(color)}"/>
+      </RoundRectangle>
+    </PartDraw>
+"""
+    }
+
+    private fun gradient(l: Layer, x1: Float, y1: Float, x2: Float, y2: Float) =
+        """<LinearGradient startX="${x1.i}" startY="${y1.i}" endX="${x2.i}" endY="${y2.i}" colors="${c(l.color)} ${c(l.color2)}" positions="0 1"/>"""
+
+    private fun fill(l: Layer, w: Float, h: Float) =
+        if (l.color2 == 0L) """<Fill color="${c(l.color)}"/>""" else """<Fill color="${c(l.color)}">${gradient(l, 0f, 0f, w, h)}</Fill>"""
+
+    private fun stroke(l: Layer, x1: Float, y1: Float, x2: Float, y2: Float): String {
+        val open = """<Stroke color="${c(l.color)}" thickness="${l.thickness.i}"${if (l.kind == LayerKind.RING) "" else " cap=\"ROUND\""}"""
+        return if (l.color2 == 0L) "$open/>" else "$open>${gradient(l, x1, y1, x2, y2)}</Stroke>"
+    }
+
+    private val Weights = listOf("THIN", "LIGHT", "NORMAL", "MEDIUM", "BOLD")
     private val Float.i get() = roundToInt()
     private fun c(argb: Long) = "#%08x".format(argb and 0xFFFFFFFF)
     private fun escape(s: String) = s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
@@ -217,8 +252,8 @@ object Presets {
         "Orbit" to FaceDoc.Starter,
         "Minimal" to face(
             0xFF000000,
-            l(LayerKind.TIME, 0xFFFFFFFF) { copy(size = 120f, bold = false) },
-            l(LayerKind.DATE, 0xFFB8BCC8) { copy(y = 300f, size = 26f, bold = false) },
+            l(LayerKind.TIME, 0xFFFFFFFF) { copy(size = 120f, weight = 0) },
+            l(LayerKind.DATE, 0xFFB8BCC8) { copy(y = 300f, size = 26f, weight = 1) },
         ),
         "Classic" to face(
             0xFF0E1015,
@@ -250,6 +285,19 @@ object Presets {
             l(LayerKind.RECT, 0xFFFF7A59) { copy(y = 305f, size = 150f, height = 46f, thickness = 23f) },
             l(LayerKind.TIME, 0xFFFFFFFF) { copy(y = 200f, size = 110f) },
             l(LayerKind.DATE, 0xFF2B0F16) { copy(y = 305f, size = 26f) },
+        ),
+        "Analog" to face(
+            0xFF0E1015,
+            l(LayerKind.TICKS, 0xFF6B7080) { copy(count = 60, height = 8f, thickness = 2f) },
+            l(LayerKind.TICKS, 0xFFFFFFFF) { copy(count = 12, height = 26f, thickness = 6f) },
+            l(LayerKind.DATE, 0xFF8B7BFF) { copy(x = 320f, y = 225f, size = 22f) },
+            l(LayerKind.HANDS, 0xFFFFFFFF) { copy(color2 = 0xFFFF6A4D) },
+        ),
+        "Gradient" to face(
+            0xFF000000,
+            l(LayerKind.CIRCLE, 0xFF6C5CE7) { copy(y = 225f, size = 225f, color2 = 0xFFFF3D8B) },
+            l(LayerKind.TIME, 0xFFFFFFFF) { copy(size = 100f) },
+            l(LayerKind.DATE, 0xCCFFFFFF) { copy(y = 295f, size = 24f) },
         ),
         "Sunset" to face(
             0xFF101C33,

@@ -38,7 +38,7 @@ fun HomeScreen(onSettings: () -> Unit, onWatchFaces: () -> Unit) {
         Text("סטודיו", Modifier.enter(1), fontSize = 38.sp, fontWeight = FontWeight.Bold)
         Text("עצב מאפס, מקצה לקצה", Modifier.enter(2), color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(24.dp))
-        StudioCard("Watch Faces", "פני שעון ל-Galaxy Watch", listOf(Violet, Cyan), true, Modifier.enter(3), onWatchFaces)
+        StudioCard("Watch Faces", "עורך פני שעון ל-Galaxy Watch", listOf(Violet, Cyan), true, Modifier.enter(3), onWatchFaces)
         Spacer(Modifier.height(14.dp))
         StudioCard("Widgets", "ווידג'טים לטלפון · בקרוב", listOf(Color(0xFFFF7A59), Color(0xFFFF3D8B)), false, Modifier.enter(4)) {}
     }
