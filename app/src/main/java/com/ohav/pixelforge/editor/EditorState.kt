@@ -66,6 +66,22 @@ class EditorState(context: Context, val studio: Studio = Studio.FACE) {
         Layer.create(kind, doc.nextId, accent).let { it.copy(x = it.x + (doc.w - FACE_SIZE) / 2, y = (it.y + (doc.h - FACE_SIZE) / 2).coerceIn(0f, doc.h)) },
     )
 
+    /** Adds a part laid out for the 450 face, moved to this canvas's centre. */
+    fun addCentered(layer: Layer) = add(layer.copy(x = layer.x + (doc.w - FACE_SIZE) / 2, y = (layer.y + (doc.h - FACE_SIZE) / 2).coerceIn(0f, doc.h)))
+
+    /** Adds a stored picture [side] wide (or tall), keeping its [aspect]. */
+    fun addPicture(name: String, aspect: Float, side: Float, corner: Float) {
+        val w = if (aspect >= 1) side else side * aspect
+        add(Layer.create(LayerKind.IMAGE, 0, 0).copy(x = doc.w / 2, y = doc.h / 2, text = name, size = w, height = w / aspect, thickness = corner, color = 0xFFFFFFFF))
+    }
+
+    /** Puts a stored picture under everything as a full-canvas background, locked so drags pass through. */
+    fun addBackground(name: String) {
+        val l = Layer.create(LayerKind.IMAGE, doc.nextId, 0).copy(x = doc.w / 2, y = doc.h / 2, text = name, size = doc.w, height = doc.h, thickness = 0f, color = 0xFFFFFFFF, locked = true)
+        edit { it.copy(layers = listOf(l) + it.layers) }
+        selectedId = l.id
+    }
+
     /** Adds [layer] on top (its id is replaced with a fresh one) and selects it. */
     fun add(layer: Layer) {
         val l = layer.copy(id = doc.nextId)

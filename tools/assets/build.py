@@ -41,7 +41,9 @@ def words(name):
 # --- Kenney UI Pack: Sci-Fi (CC0) -------------------------------------------------------------
 def kenney():
     page = get("https://kenney.nl/assets/ui-pack-sci-fi").decode("utf-8", "replace")
-    zips = sorted(set(re.findall(r"https://kenney\.nl/media/pages/assets/[^\"'\s]+?\.zip", page)))
+    zips = sorted({z if z.startswith("http") else "https://kenney.nl" + z for z in re.findall(r"[\"'](\S+?\.zip)[\"']", page)})
+    if not zips:
+        log("kenney page", len(page), [m for m in re.findall(r'href="([^"]+)"', page) if "download" in m.lower() or "media" in m][:20])
     log("kenney zips:", zips)
     if not zips:
         raise RuntimeError("no zip link on the asset page")
@@ -67,45 +69,29 @@ def kenney():
 
 
 # --- 3dicons (CC0) ----------------------------------------------------------------------------
-CDN3D = "https://3dicons.sgp1.cdn.digitaloceanspaces.com/v1"
+# Built from the official download pack, uploaded once as a release asset of this repo.
+PACK3D = "https://github.com/ohavs/Pixel-Forge-Studio/releases/download/asset-sources/3dicons.zip"
 STYLES3D = ["color", "clay", "gradient", "premium"]
 
 
 def threedicons():
-    html = get("https://3dicons.co").decode("utf-8", "replace")
-    urls = set(re.findall(r"https?://[^\"'\s\\)]+?\.(?:png|webp|jpg)", html))
-    log("3dicons home: bytes", len(html), "image urls", len(urls), sorted(urls)[:15])
-    names = set(re.findall(r"/v1/(?:dynamic|front|iso)/\w+/([a-z0-9\-]+?)-(?:dynamic|front|iso)-\w+\.png", html))
-    # Next.js pages keep their data in script chunks: look there too.
-    for js in sorted(set(re.findall(r"/_next/static/[^\"'\s]+?\.js", html)))[:60]:
-        try:
-            src = get("https://3dicons.co" + js).decode("utf-8", "replace")
-        except Exception as e:
+    z = zipfile.ZipFile(io.BytesIO(get(PACK3D, 600)))
+    pngs = [n for n in z.namelist() if n.lower().endswith(".png") and "__macosx" not in n.lower()]
+    log("3dicons pack pngs:", len(pngs), pngs[:10])
+    names = {}
+    for n in pngs:
+        low = n.lower()
+        style = next((s for s in STYLES3D if s in low), None)
+        # Keep one angle (the "dynamic" 3/4 view) when the pack has several.
+        if style is None or ("dynamic" not in low and any(a in low for a in ("front", "iso"))):
             continue
-        names |= set(re.findall(r"/v1/(?:dynamic|front|iso)/\w+/([a-z0-9\-]+?)-(?:dynamic|front|iso)-\w+\.png", src))
-        found = re.findall(r'"?(?:name|slug|title)"?\s*:\s*"([a-z0-9\- ]{2,40})"', src)
-        if found:
-            log("3dicons chunk", js, "name-like strings", len(found), found[:10])
-    nd = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', html, re.S)
-    if nd:
-        data = nd.group(1)
-        log("3dicons __NEXT_DATA__ bytes", len(data), data[:400])
-        names |= set(re.findall(r'"(?:name|slug)"\s*:\s*"([a-z0-9\-]{2,40})"', data))
-    log("3dicons candidate names:", len(names), sorted(names)[:40])
-    items = []
-    for n in sorted(names):
-        ok = 0
-        for s in STYLES3D:
-            rel = f"3dicons/{s}/{n}.png"
-            try:
-                save_png(get(f"{CDN3D}/dynamic/{s}/{n}-dynamic-{s}.png"), os.path.join(OUT, rel), 256)
-                ok += 1
-            except Exception as e:
-                if s == "color":
-                    log("3dicons miss", n, e)
-                    break
-        if ok:
-            items.append({"n": n, "s": ok})
+        base = os.path.splitext(os.path.basename(low))[0]
+        name = re.sub(r"[-_ ]*(dynamic|front|iso|color|clay|gradient|premium|\d+x)[-_ ]*", "-", base).strip("-")
+        dst = os.path.join(OUT, f"3dicons/{style}/{name}.png")
+        if not os.path.exists(dst):
+            save_png(z.read(n), dst, 256)
+            names.setdefault(name, set()).add(style)
+    items = [{"n": n} for n, st in sorted(names.items()) if "color" in st]
     json.dump({"styles": STYLES3D, "items": items}, open(os.path.join(OUT, "catalog/3dicons.json"), "w"), separators=(",", ":"))
     log("3dicons built:", len(items))
 
@@ -138,8 +124,81 @@ def fluent():
     log("fluent3d groups:", {c["g"]: len(c["items"]) for c in cat})
 
 
+# --- Iconify sets, grouped (the app draws them through api.iconify.design) ----------------------
+def npm_json(pkg, path):
+    """Reads one JSON file from an npm package (downloads the tarball into /tmp/npm)."""
+    d = f"/tmp/npm/{pkg.replace('/', '_')}"
+    if not os.path.exists(d):
+        os.makedirs(d)
+        tgz = subprocess.run(["npm", "pack", "-q", pkg], cwd=d, check=True, capture_output=True, text=True).stdout.strip().split("\n")[-1]
+        subprocess.run(["tar", "xzf", tgz], cwd=d, check=True)
+    return json.load(open(os.path.join(d, "package", path)))
+
+
+def write(name, groups):
+    cat = [{"g": g, "items": [{"n": n} for n in v]} for g, v in groups if v]
+    json.dump(cat, open(os.path.join(OUT, f"catalog/{name}.json"), "w"), separators=(",", ":"))
+    log(name, {c["g"]: len(c["items"]) for c in cat})
+
+
+def keyword_groups(names, rules, rest):
+    """Groups names by the first rule (title, words) whose word appears in the name."""
+    out = {t: [] for t, _ in rules}
+    out[rest] = []
+    for n in names:
+        for t, ws in rules:
+            if any(w in n for w in ws):
+                out[t].append(n)
+                break
+        else:
+            out[rest].append(n)
+    return list(out.items())
+
+
+def tabler():
+    meta = npm_json("@tabler/icons", "icons.json")
+    names = set(npm_json("@iconify-json/tabler", "icons.json")["icons"])
+    groups = {}
+    for m in meta.values():
+        c = m.get("category") or "Other"
+        if m["name"] in names:
+            groups.setdefault(c, []).append("tabler:" + m["name"])
+        if "filled" in m.get("styles", {}) and m["name"] + "-filled" in names:
+            groups.setdefault("Filled", []).append("tabler:" + m["name"] + "-filled")
+    order = sorted(groups, key=lambda g: (g == "Brand", -len(groups[g])))
+    write("tabler", [(g, sorted(groups[g])) for g in order])
+
+
+def meteocons():
+    names = sorted(npm_json("@iconify-json/meteocons", "icons.json")["icons"])
+    rules = [("Sun", ["clear-day", "sun", "hot", "uv-index"]), ("Night", ["night", "moon", "star"]),
+             ("Clouds", ["cloud", "overcast", "fog", "haze", "mist", "smoke", "dust"]), ("Rain", ["rain", "drizzle", "umbrella", "raindrop"]),
+             ("Snow", ["snow", "sleet", "hail", "snowflake"]), ("Storm", ["thunder", "lightning", "tornado", "hurricane"]),
+             ("Wind", ["wind", "windsock"]), ("Temperature", ["thermometer", "celsius", "fahrenheit", "barometer", "humidity", "pressure"])]
+    fill = [f"meteocons:{n}" for n in names if n.endswith("-fill")]
+    line = [f"meteocons:{n}" for n in names if not n.endswith("-fill")]
+    write("meteocons", [(g, v) for g, v in keyword_groups(fill, rules, "More")] + [("Line", line)])
+
+
+def vectors():
+    """The open sets that stand in for SVG Repo: one group per set, one style each to keep it tidy."""
+    sets = [("Phosphor", "ph", lambda n: n.endswith("-duotone")), ("Solar", "solar", lambda n: n.endswith("-bold-duotone")),
+            ("Game icons", "game-icons", lambda n: True), ("Noto", "noto", lambda n: True),
+            ("Streamline", "streamline-emojis", lambda n: True), ("Flat color", "flat-color-icons", lambda n: True),
+            ("Fluent color", "fluent-color", lambda n: True), ("Flags", "circle-flags", lambda n: "-" not in n or len(n) <= 6),
+            ("Material", "material-symbols", lambda n: n.endswith("-rounded") and "outline" not in n)]
+    out = []
+    for title, prefix, keep in sets:
+        try:
+            names = sorted(npm_json(f"@iconify-json/{prefix}", "icons.json")["icons"])
+            out.append((title, [f"{prefix}:{n}" for n in names if keep(n)]))
+        except Exception as e:
+            log("vectors skip", prefix, repr(e))
+    write("vectors", out)
+
+
 os.makedirs(os.path.join(OUT, "catalog"), exist_ok=True)
-for f in (fluent, kenney, threedicons):
+for f in (tabler, meteocons, vectors, fluent, kenney, threedicons):
     try:
         f()
     except Exception as e:

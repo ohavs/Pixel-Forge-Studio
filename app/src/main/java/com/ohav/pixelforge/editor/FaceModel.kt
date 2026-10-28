@@ -49,7 +49,12 @@ data class Layer(
     val visible: Boolean = true,
     val locked: Boolean = false,
 ) {
-    val name get() = if ((kind == LayerKind.TEXT || kind == LayerKind.ICON) && text.isNotBlank()) text else kind.title
+    val name get() = when {
+        kind == LayerKind.IMAGE && text.startsWith("lib~") -> text.split('~').getOrNull(1) ?: kind.title
+        kind == LayerKind.ICON && ':' in text -> text.substringAfter(':')
+        (kind == LayerKind.TEXT || kind == LayerKind.ICON) && text.isNotBlank() -> text
+        else -> kind.title
+    }
 
     /** Approximate box size (w, h) for text kinds; real for shapes. */
     fun box(): Pair<Float, Float> = when (kind) {
