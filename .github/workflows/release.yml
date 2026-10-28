@@ -30,15 +30,18 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Decode keystore
-        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > release.jks
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | tr -d ' \r\n' | base64 -d > release.jks
+          echo "KSPW=$(echo '${{ secrets.KEYSTORE_PASSWORD }}' | tr -d ' \r\n')" >> $GITHUB_ENV
+          echo "::notice::jks $(sha256sum release.jks | cut -c1-12)"
 
       - name: Build signed APK
         env:
           BUILD_NUMBER: ${{ github.run_number }}
           KEYSTORE_FILE: release.jks
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEYSTORE_PASSWORD: ${{ env.KSPW }}
           KEY_ALIAS: pixelforge
-          KEY_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ env.KSPW }}
         run: |
           chmod +x gradlew
           set -o pipefail
