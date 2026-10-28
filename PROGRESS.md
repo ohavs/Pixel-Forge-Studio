@@ -4,7 +4,7 @@
 שלב 0b — קוד מוכן, Release v1.0.11 (טלפון + `wear-pixel-forge.apk`). ממתין לבדיקה על השעון: התקנת אפליקציית השעון ב-ADB אלחוטי → "מעבדת שעון" בטלפון → "בנה ושלח". אם עובד: לסמן ✅ ולעבור לשלב 1.
 אם נכשל: הודעת השגיאה מוצגת במסך המעבדה (וגם בשעון) — לתקן לפיה.
 
-ממתין גם: בחירת אייקון מ-`design/logo/v2/preview.png` (A Pixel P / B Forge P / C Studio Grid) → להחליף `ic_fg.xml` בשתי האפליקציות. רינדור: `pip install cairosvg` (בלי זה ה-skill מצייר עיוור).
+ממתין גם: שם חדש **Orbit Studio** (נבחר). בחירת לוגו מ-`design/logo/orbit/preview.png` (A שני גופים במסלול — מומלץ / B טבעת+ריבוע / C חצי עגול-חצי ריבוע) → להחליף `ic_fg.xml` בשתי האפליקציות + שם האפליקציה (`strings.xml`, label בשעון). רינדור: `pip install cairosvg` (בלי זה ה-skill מצייר עיוור); סקריפט תצוגה עגולה: לכתוב מחדש לפי הצורך.
 עדכון בטלפון נכשל ב-1.0.7: ה-updater הישן לוקח את ה-APK הראשון בריליס (היה של השעון). תוקן ב-workflow: הטלפון מועלה ראשון, השעון `wear-pixel-forge.apk` אחריו.
 
 ## ארכיטקטורה (0b)
@@ -19,7 +19,7 @@
 - AI = Gemini (מפתח מ-AI Studio). המשתמש מזין אותו בהגדרות; מונה יומי.
 - כיוון RTL בכל האפליקציה, אבל כל טקסט מתיישר לפי השפה שלו (`TextDirection.Content` ב-`StudioTheme`): עברית לימין, אנגלית לשמאל. טקסט באנגלית שצריך להיצמד לשמאל — `fillMaxWidth`.
 - כיוון עיצובי: דינמי, נקי, הרבה הנפשות (`ui/Motion.kt`).
-- לוגו: "Spark P" (`design/logo/b-symbol.svg`) — P גיאומטרי עם פיקסל שניתז. אייקון adaptive + monochrome בשתי האפליקציות. חלופות ב-`design/logo/`.
+- לוגו ישן (יוחלף): "Spark P" (`design/logo/b-symbol.svg`) — P גיאומטרי עם פיקסל שניתז. אייקון adaptive + monochrome בשתי האפליקציות. חלופות ב-`design/logo/`.
 - Skills ב-`.claude/skills`: `logo-design`, `algorithmic-art`, `theme-factory` (Anthropic), `material-3` (hamen), `text-to-lottie` (diffusionstudio — לאנימציות UI בטלפון בלבד; WFF לא מריץ Lottie), `wear-widgets`, `wear-compose-m3`, `glance-canonical-layouts`, `glance-appwidget-updates-and-memory` (רשמיים של Google, android/skills). ל-WFF אין skill פופולרי — רק פרויקטים קהילתיים קטנים. `landing-page-design` (elayadesign) — לא רלוונטי לאפליקציה, לא הותקן. prompt-motion.com — חסום ברשת של הסשן.
 - CI: לוגים נגישים דרך GitHub MCP (`get_job_logs`).
 
