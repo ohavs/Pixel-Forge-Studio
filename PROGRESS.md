@@ -18,7 +18,7 @@
 - הורדה לפי דרישה: קטלוגים בענף `assets` (נבנה ע"י `tools/assets/build.py` + `assets.yml`), תמונות מהמקור, קאש במכשיר. ה-APK לא גדל.
 - תמונת ספרייה → שכבת IMAGE (`lib~שם~ts.png`), רקע → IMAGE נעולה בתחתית.
 - Forge והתבניות הוצאו מהעורך (הקוד נשאר, `ForgePanel.kt` לא בשימוש).
-- 3dicons: אין API; ניסיון לחלץ מפתח Supabase מהאתר נחסם (בצדק). נבנה מחבילה רשמית ש-המשתמש מעלה ל-Release `asset-sources` כ-`3dicons.zip`.
+- 3dicons + Kenney: אין API/לינק ישיר (ניסיון לחלץ מפתח Supabase נחסם, בצדק). נבנים מחבילות רשמיות שהמשתמש מעלה ל-Release `asset-sources`: `3dicons.zip`, `kenney-scifi.zip` → להריץ `assets.yml` מחדש.
 - Figma Community: דולג (דורש התחברות + רישיון לכל קובץ). Haikei → מחוללים פנימיים.
 - Skills: נוסף `frontend-design`. canvas-design / skill-creator זמינים כ-skills מובנים (anthropic-skills).
 - לא נבדק במכשיר עדיין.
