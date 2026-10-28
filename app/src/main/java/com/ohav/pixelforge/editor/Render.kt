@@ -29,8 +29,15 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.roundToInt
 
-/** Pictures a design needs while drawing: imported images by file name, Iconify icons by id. */
-class DocAssets(val image: (String) -> ImageBitmap?, val icon: (String) -> Iconify.Art?)
+/**
+ * Pictures a design needs while drawing: imported images by file name, Iconify icons by id,
+ * picture hands by (layer, part 1-3). Null = not ready yet (a placeholder is drawn).
+ */
+class DocAssets(
+    val image: (String) -> ImageBitmap?,
+    val icon: (String) -> Iconify.Art?,
+    val hand: (Layer, Int) -> ImageBitmap? = { _, _ -> null },
+)
 
 val FontWeights = listOf(FontWeight.Thin, FontWeight.Light, FontWeight.Normal, FontWeight.Medium, FontWeight.Bold)
 
@@ -67,7 +74,21 @@ fun DrawScope.drawDoc(doc: FaceDoc, bg: Color, measurer: TextMeasurer, now: Loca
                 LayerKind.TICKS -> l.ticks().forEach { (a, b) ->
                     drawLine(c, Offset(a.first * u, a.second * u), Offset(b.first * u, b.second * u), l.thickness * u, StrokeCap.Round)
                 }
-                LayerKind.HANDS -> {
+                LayerKind.HANDS -> if (l.text.isNotEmpty()) {
+                    val sec = now.second + now.nano / 1e9f
+                    val min = now.minute + sec / 60
+                    listOf((now.hour % 12 + min / 60) * 30, min * 6, now.second * 6f).take(if (l.extra) 3 else 2).forEachIndexed { i, deg ->
+                        val img = assets.hand(l, i + 1) ?: return@forEachIndexed
+                        val h = l.handSpec(i + 1)
+                        rotate(deg, center) {
+                            drawImage(
+                                img, IntOffset.Zero, IntSize(img.width, img.height),
+                                IntOffset((center.x - h.w * u / 2).roundToInt(), (center.y - h.len * u).roundToInt()),
+                                IntSize((h.w * u).roundToInt(), (h.h * u).roundToInt()), filterQuality = FilterQuality.High,
+                            )
+                        }
+                    }
+                } else {
                     val t = l.thickness * u
                     val sec = now.second + now.nano / 1e9f
                     val min = now.minute + sec / 60
@@ -116,6 +137,19 @@ fun DrawScope.drawDoc(doc: FaceDoc, bg: Color, measurer: TextMeasurer, now: Loca
                     }
                 }
                 LayerKind.CIRCLE -> drawCircle(brush, r, center)
+                LayerKind.GAUGE -> {
+                    val d = DataSource.of(l.text)
+                    val sweep = l.height * d.sampleFraction(now)
+                    if (l.extra) {
+                        rotate(l.angle + sweep, center) {
+                            drawLine(c, Offset(center.x, center.y + l.thickness * u * 1.6f), Offset(center.x, center.y - r), l.thickness * u, StrokeCap.Round)
+                        }
+                        drawCircle(if (l.color2 == 0L) c else Color(l.color2), l.thickness * u, center)
+                    } else drawArc(
+                        brush, l.angle - 90, sweep, false, Offset(center.x - r, center.y - r),
+                        Size(2 * r, 2 * r), style = Stroke(l.thickness * u, cap = StrokeCap.Round),
+                    )
+                }
                 LayerKind.RECT -> rotate(l.rotation, center) {
                     drawRoundRect(brush, Offset(center.x - r / 2, center.y - l.height * u / 2), Size(r, l.height * u), CornerRadius(l.thickness * u))
                 }
@@ -123,6 +157,7 @@ fun DrawScope.drawDoc(doc: FaceDoc, bg: Color, measurer: TextMeasurer, now: Loca
                     val text = when (l.kind) {
                         LayerKind.TIME -> now.format(DateTimeFormatter.ofPattern(if (l.extra) "hh:mm:ss" else "hh:mm"))
                         LayerKind.DATE -> date
+                        LayerKind.DATA -> DataSource.of(l.text).let { "${it.sample(now).roundToInt()}${it.unit}" }
                         else -> l.text
                     }
                     val m = measurer.measure(text, TextStyle(color = c, fontSize = (l.size * u).toSp(), fontWeight = FontWeights[l.weight.coerceIn(FontWeights.indices)]))

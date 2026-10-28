@@ -38,13 +38,26 @@ fun SettingsScreen(onBack: () -> Unit) {
         Spacer(Modifier.height(14.dp))
         Section("מפתח Gemini", 3) {
             var key by remember { mutableStateOf(prefs.getString("ai_key", "") ?: "") }
-            Text("נשמר רק במכשיר. ללא מפתח, יצירה ב-AI כבויה.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+            Text("נשמר רק במכשיר. בלי מפתח, תמונות AI נוצרות דרך Pollinations החינמי.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
             Spacer(Modifier.height(8.dp))
             OutlinedTextField(
                 key, { key = it.trim(); prefs.edit().putString("ai_key", key).apply() },
                 Modifier.fillMaxWidth(), singleLine = true, label = { Text("API key") },
                 visualTransformation = PasswordVisualTransformation(),
             )
+        }
+        Spacer(Modifier.height(14.dp))
+        Section("יצירת תמונות AI", 4) {
+            var provider by remember { mutableStateOf(prefs.getString("ai_provider", "auto") ?: "auto") }
+            var cap by remember { mutableIntStateOf(prefs.getInt("ai_cap", 30)) }
+            Text("Pollinations חינמי ובלי מפתח. Gemini באיכות גבוהה יותר, דורש מפתח עם חיוב (~4 סנט לתמונה).", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+            Row(Modifier.padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("auto" to "אוטומטי", "pollinations" to "Pollinations", "gemini" to "Gemini").forEach { (k, t) ->
+                    FilterChip(provider == k, { provider = k; prefs.edit().putString("ai_provider", k).apply() }, { Text(t) })
+                }
+            }
+            Text("תקרה יומית: $cap תמונות · נוצלו היום ${com.ohav.pixelforge.forge.AiImages.usedToday(ctx)}")
+            Slider(cap.toFloat(), { cap = it.toInt(); prefs.edit().putInt("ai_cap", cap).apply() }, valueRange = 0f..200f)
         }
         Spacer(Modifier.height(14.dp))
         Text("גרסה ${BuildConfig.VERSION_NAME}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)

@@ -10,9 +10,9 @@ import kotlin.math.roundToInt
 const val FACE_SIZE = 450f
 
 enum class LayerKind(val title: String) {
-    TIME("שעה"), DATE("תאריך"), TEXT("טקסט"), RING("טבעת"), ARC("קשת"), TICKS("סימונים"), HANDS("מחוגים"), CIRCLE("עיגול"), RECT("מלבן"), ICON("אייקון"), IMAGE("תמונה");
+    TIME("שעה"), DATE("תאריך"), TEXT("טקסט"), RING("טבעת"), ARC("קשת"), TICKS("סימונים"), HANDS("מחוגים"), CIRCLE("עיגול"), RECT("מלבן"), ICON("אייקון"), IMAGE("תמונה"), DATA("נתון"), GAUGE("מד");
     val isImage get() = this == ICON || this == IMAGE
-    val isText get() = this == TIME || this == DATE || this == TEXT
+    val isText get() = this == TIME || this == DATE || this == TEXT || this == DATA
 }
 
 /**
@@ -25,6 +25,10 @@ enum class LayerKind(val title: String) {
  * [extra]: seconds for TIME, a second hand for HANDS. [rotation] turns RECT, TEXT and images.
  * ICON: [text] is the icon name, [size] its side. IMAGE: [text] is the picture's file name,
  * [size] x [height] its box and [thickness] the corner radius. Both go to image slots on the watch.
+ * HANDS with a [text] style (see [HandStyles]) are pictures too: one slot per hand.
+ * DATA: live value of the [DataSource] named in [text], font size [size].
+ * GAUGE: the [DataSource] in [text] as an arc ([extra] = false) or a needle ([extra] = true) of
+ * radius/length [size] and width [thickness], sweeping [height] degrees from [angle].
  */
 data class Layer(
     val id: Long,
@@ -55,10 +59,13 @@ data class Layer(
         LayerKind.RING, LayerKind.ARC, LayerKind.TICKS, LayerKind.HANDS, LayerKind.CIRCLE -> size * 2 to size * 2
         LayerKind.RECT, LayerKind.IMAGE -> size to height
         LayerKind.ICON -> size to size
+        LayerKind.DATA -> size * 0.62f * 5 + size * .4f to size * 1.3f
+        LayerKind.GAUGE -> size * 2 to size * 2
     }
 
     fun hit(px: Float, py: Float): Boolean = when (kind) {
         LayerKind.RING, LayerKind.ARC -> abs(hypot(px - x, py - y) - size) < thickness / 2 + 18
+        LayerKind.GAUGE -> if (extra) hypot(px - x, py - y) < size else abs(hypot(px - x, py - y) - size) < thickness / 2 + 18
         LayerKind.TICKS -> abs(hypot(px - x, py - y) - (size - height / 2)) < height / 2 + 14
         LayerKind.CIRCLE, LayerKind.HANDS -> hypot(px - x, py - y) < size
         else -> box().let { (w, h) -> abs(px - x) < w / 2 + 8 && abs(py - y) < h / 2 + 8 }
@@ -67,7 +74,7 @@ data class Layer(
     /** Uniformly resized by [f] (pinch). ARC's [height] is an angle, so it stays. */
     fun scaled(f: Float): Layer = copy(
         size = (size * f).coerceIn(4f, 1000f),
-        height = if (kind == LayerKind.ARC) height else (height * f).coerceIn(0f, 1000f),
+        height = if (kind == LayerKind.ARC || kind == LayerKind.GAUGE) height else (height * f).coerceIn(0f, 1000f),
         thickness = (thickness * f).coerceIn(0f, 500f),
     )
 
@@ -101,8 +108,48 @@ data class Layer(
             LayerKind.RECT -> Layer(id, kind, y = 340f, size = 140f, height = 44f, thickness = 22f, color = accent)
             LayerKind.ICON -> Layer(id, kind, y = 120f, size = 56f, text = "Favorite", color = accent)
             LayerKind.IMAGE -> Layer(id, kind, size = 200f, height = 200f, thickness = 100f)
+            LayerKind.DATA -> Layer(id, kind, y = 300f, size = 30f, text = DataSource.STEPS.name, color = accent)
+            LayerKind.GAUGE -> Layer(id, kind, size = 200f, thickness = 12f, angle = 210f, height = 300f, text = DataSource.BATTERY.name, color = accent)
         }
     }
+}
+
+/**
+ * Live values a DATA or GAUGE layer shows. [expr] is the WFF value, [fraction] its 0..1 share for
+ * gauges. [sample] stands in for it on the phone (the watch shows the real one).
+ */
+enum class DataSource(val title: String, val expr: String, val fraction: String, val unit: String) {
+    STEPS("צעדים", "[STEP_COUNT]", "[STEP_PERCENT] / 100", ""),
+    HEART("דופק", "[HEART_RATE]", "[HEART_RATE] / 200", ""),
+    BATTERY("סוללה", "[BATTERY_PERCENT]", "[BATTERY_PERCENT] / 100", "%"),
+    SECONDS("שניות", "[SECOND]", "[SECOND] / 60", ""),
+    DAY("יום בחודש", "[DAY]", "[DAY] / 31", "");
+
+    fun sample(now: java.time.LocalDateTime): Float = when (this) {
+        STEPS -> 6420f; HEART -> 72f; BATTERY -> 78f; SECONDS -> now.second.toFloat(); DAY -> now.dayOfMonth.toFloat()
+    }
+
+    fun sampleFraction(now: java.time.LocalDateTime): Float = when (this) {
+        STEPS -> .64f; HEART -> .36f; BATTERY -> .78f; SECONDS -> now.second / 60f; DAY -> now.dayOfMonth / 31f
+    }
+
+    companion object {
+        fun of(name: String) = entries.firstOrNull { it.name == name } ?: STEPS
+    }
+}
+
+/** Picture hands (drawn by the phone, rotated by the watch). Empty style = plain drawn bars. */
+val HandStyles = listOf("dauphine", "sword", "baton", "arrow", "skeleton", "cyber", "leaf")
+
+/** One picture hand: [len] from pivot to tip, [tail] behind the pivot, [w] wide. part 1 hour, 2 minute, 3 second. */
+class HandSpec(val len: Float, val tail: Float, val w: Float) {
+    val h get() = len + tail
+}
+
+fun Layer.handSpec(part: Int): HandSpec = when (part) {
+    1 -> HandSpec(size * .64f, thickness * 1.2f, thickness * 2.6f)
+    2 -> HandSpec(size, thickness * 1.2f, thickness * 2.1f)
+    else -> HandSpec(size * 1.08f, size * .24f, (thickness * 1.6f).coerceAtLeast(12f))
 }
 
 /**
@@ -158,11 +205,20 @@ object FaceXml {
     /** Number of image slots baked into the template APK (watchface/src/custom/res/drawable-nodpi). */
     const val SLOTS = 24
 
-    /** Layers that need a picture on the watch, in slot order. */
-    fun imageLayers(doc: FaceDoc) = doc.layers.filter { it.visible && it.kind.isImage }.take(SLOTS)
+    /** A picture on the watch: [part] 0 is the layer's own image, 1-3 the hour/minute/second hand. */
+    data class Slot(val layer: Layer, val part: Int)
+
+    /** Pictures the watch needs, in slot order. */
+    fun slots(doc: FaceDoc): List<Slot> = doc.layers.filter { it.visible }.flatMap { l ->
+        when {
+            l.kind.isImage -> listOf(Slot(l, 0))
+            l.kind == LayerKind.HANDS && l.text.isNotEmpty() -> (1..(if (l.extra) 3 else 2)).map { Slot(l, it) }
+            else -> emptyList()
+        }
+    }.take(SLOTS)
 
     fun build(doc: FaceDoc): String = buildString {
-        val slots = imageLayers(doc).withIndex().associate { (i, l) -> l.id to i }
+        val slots = slots(doc).withIndex().associate { (i, s) -> (s.layer.id to s.part) to i }
         appendLine("""<?xml version="1.0" encoding="utf-8"?>""")
         appendLine("""<WatchFace width="450" height="450" clipShape="CIRCLE">""")
         val analog = doc.layers.any { it.visible && it.kind == LayerKind.HANDS }
@@ -177,13 +233,14 @@ object FaceXml {
       </Rectangle>
     </PartDraw>
 """)
-        doc.layers.filter { it.visible && (!it.kind.isImage || it.id in slots) }
-            .forEachIndexed { i, l -> append(layer(l, "l$i", slots[l.id] ?: 0)) }
+        doc.layers.filter { it.visible && (!it.kind.isImage || (it.id to 0) in slots) }
+            .forEachIndexed { i, l -> append(layer(l, "l$i") { part -> slots[l.id to part] }) }
         appendLine("  </Scene>")
         appendLine("</WatchFace>")
     }
 
-    private fun layer(l: Layer, name: String, slot: Int): String {
+    private fun layer(l: Layer, name: String, slotOf: (Int) -> Int?): String {
+        val slot = slotOf(0) ?: 0
         val (w, h) = l.box()
         val bx = (l.x - w / 2).i; val by = (l.y - h / 2).i
         val font = """<Font family="SYNC_TO_DEVICE" size="${l.size.i}" weight="${Weights[l.weight.coerceIn(Weights.indices)]}" slant="NORMAL" color="${c(l.color)}">"""
@@ -237,7 +294,18 @@ object FaceXml {
                 }
                 append("    </PartDraw>\n")
             }
-            LayerKind.HANDS -> buildString {
+            LayerKind.HANDS -> if (l.text.isNotEmpty()) buildString {
+                listOf("([HOUR_0_11] + [MINUTE] / 60) * 30", "([MINUTE] + [SECOND] / 60) * 6", "[SECOND] * 6").forEachIndexed { i, angle ->
+                    val s = slotOf(i + 1) ?: return@forEachIndexed
+                    val h = l.handSpec(i + 1)
+                    append("""
+    <PartImage x="${(l.x - h.w / 2).i}" y="${(l.y - h.len).i}" width="${h.w.i}" height="${h.h.i}" pivotX="0.5" pivotY="${"%.4f".format(java.util.Locale.US, h.len / h.h)}" name="$name$i">
+      <Transform target="angle" value="$angle"/>${if (i == 2) "\n      <Variant mode=\"AMBIENT\" target=\"alpha\" value=\"0\"/>" else ""}
+      <Image resource="slot_$s"/>
+    </PartImage>
+""")
+                }
+            } else buildString {
                 append(hand(l, "${name}h", "([HOUR_0_11] + [MINUTE] / 60) * 30", l.size * .62f, l.thickness * 1.15f, l.color, false))
                 append(hand(l, "${name}m", "([MINUTE] + [SECOND] / 60) * 6", l.size, l.thickness, l.color, false))
                 if (l.extra) append(hand(l, "${name}s", "[SECOND] * 6", l.size * 1.08f, (l.thickness * .35f).coerceAtLeast(2f), l.color2.takeIf { it != 0L } ?: l.color, true))
@@ -256,10 +324,33 @@ object FaceXml {
     </PartDraw>
 """
             LayerKind.ICON, LayerKind.IMAGE -> """
-    <PartImage x="$bx" y="$by" width="${w.i}" height="${h.i}" angle="${l.rotation.i}" name="$name">
+    <PartImage x="$bx" y="$by" width="${w.i}" height="${h.i}" angle="${l.rotation.i}" name="$name">${if (w * h > 60000) "\n      <Variant mode=\"AMBIENT\" target=\"alpha\" value=\"70\"/>" else ""}
       <Image resource="slot_$slot"/>
     </PartImage>
 """
+            LayerKind.DATA -> DataSource.of(l.text).let { d -> """
+    <PartText x="$bx" y="$by" width="${w.i}" height="${h.i}" name="$name">
+      <Text align="CENTER" ellipsis="TRUE">
+        $font<Template>%s${escape(d.unit)}<Parameter expression="${d.expr}"/></Template></Font>
+      </Text>
+    </PartText>
+""" }
+            LayerKind.GAUGE -> DataSource.of(l.text).let { d ->
+                val sweep = "${l.angle.i} + ${l.height.i} * (${d.fraction})"
+                if (l.extra) hand(l, name, sweep, l.size, l.thickness, l.color, false) + """
+    <PartDraw x="${(l.x - l.thickness).i}" y="${(l.y - l.thickness).i}" width="${(2 * l.thickness).i}" height="${(2 * l.thickness).i}" name="${name}c">
+      <Ellipse x="0" y="0" width="${(2 * l.thickness).i}" height="${(2 * l.thickness).i}"><Fill color="${c(l.color2.takeIf { it != 0L } ?: l.color)}"/></Ellipse>
+    </PartDraw>
+"""
+                else """
+    <PartDraw x="0" y="0" width="450" height="450" name="$name">
+      <Arc centerX="${l.x.i}" centerY="${l.y.i}" width="${(2 * l.size).i}" height="${(2 * l.size).i}" startAngle="${l.angle.i}" endAngle="${(l.angle + l.height).i}">
+        ${stroke(l, l.x - l.size, l.y - l.size, l.x + l.size, l.y + l.size)}
+        <Transform target="endAngle" value="$sweep"/>
+      </Arc>
+    </PartDraw>
+"""
+            }
             LayerKind.RECT -> """
     <PartDraw x="$bx" y="$by" width="${w.i}" height="${h.i}" angle="${l.rotation.i}" name="$name">
       <RoundRectangle x="0" y="0" width="${w.i}" height="${h.i}" cornerRadiusX="${l.thickness.i}" cornerRadiusY="${l.thickness.i}">

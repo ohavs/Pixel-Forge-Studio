@@ -110,8 +110,10 @@ object ImageAssets {
 
     fun load(context: Context, name: String): Bitmap? = File(dir(context), name).takeIf { it.exists() }?.let { BitmapFactory.decodeFile(it.path) }
 
-    /** Renders an ICON or IMAGE layer at its on-watch pixel size as PNG bytes. */
-    fun render(context: Context, l: Layer): ByteArray {
+    /** Renders one watch picture (ICON / IMAGE layer, or a picture hand) at its on-watch pixel size as PNG bytes. */
+    fun render(context: Context, slot: FaceXml.Slot): ByteArray {
+        val l = slot.layer
+        if (slot.part > 0) return png(com.ohav.pixelforge.forge.HandArt.bitmap(l, slot.part, 1f))
         val (w, h) = l.box()
         val bmp = Bitmap.createBitmap(w.roundToInt().coerceAtLeast(1), h.roundToInt().coerceAtLeast(1), Bitmap.Config.ARGB_8888)
         val canvas = android.graphics.Canvas(bmp)

@@ -122,9 +122,10 @@ fun EditorScreen(studio: Studio, onBack: () -> Unit) {
         status = "בונה פני שעון…"
         status = try {
             val doc = state.doc
-            Iconify.ensure(ctx, FaceXml.imageLayers(doc).filter { it.kind == LayerKind.ICON }.map { it.text })
+            val slots = FaceXml.slots(doc)
+            Iconify.ensure(ctx, slots.map { it.layer }.filter { it.kind == LayerKind.ICON }.map { it.text })
             val face = withContext(Dispatchers.IO) {
-                FaceBuilder.build(ctx, FaceXml.build(doc), FaceXml.imageLayers(doc).map { ImageAssets.render(ctx, it) })
+                FaceBuilder.build(ctx, FaceXml.build(doc), slots.map { ImageAssets.render(ctx, it) })
             }
             status = "שולח לשעון…"
             WatchLink.push(ctx, face)
@@ -165,13 +166,14 @@ fun EditorScreen(studio: Studio, onBack: () -> Unit) {
                 .aspectRatio(aspect).align(Alignment.CenterHorizontally),
         )
         TabRow(tab, Modifier.enter(2), containerColor = Color.Transparent) {
-            listOf("הוסף", "שכבות", "עיצוב").forEachIndexed { i, t -> Tab(tab == i, { tab = i }, text = { Text(t) }) }
+            listOf("מחולל", "הוסף", "שכבות", "עיצוב").forEachIndexed { i, t -> Tab(tab == i, { tab = i }, text = { Text(t) }) }
         }
         AnimatedContent(tab, Modifier.weight(1f), transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(120)) }, label = "tab") { t ->
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
                 when (t) {
-                    0 -> AddPanel(state) { tab = 2 }
-                    1 -> LayersPanel(state)
+                    0 -> ForgePanel(state)
+                    1 -> AddPanel(state) { tab = 3 }
+                    2 -> LayersPanel(state)
                     else -> StylePanel(state)
                 }
             }
@@ -238,7 +240,7 @@ private fun FaceCanvas(state: EditorState, modifier: Modifier) {
         state.selected?.takeIf { it.visible }?.let { l ->
             val dash = Stroke(1.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 8f)))
             val sel = Color(0xFF00C2FF).copy(alpha = pulse)
-            if (l.kind in listOf(LayerKind.RING, LayerKind.ARC, LayerKind.TICKS, LayerKind.HANDS, LayerKind.CIRCLE)) {
+            if (l.kind in listOf(LayerKind.RING, LayerKind.ARC, LayerKind.TICKS, LayerKind.HANDS, LayerKind.CIRCLE, LayerKind.GAUGE)) {
                 drawCircle(sel, (l.size + l.thickness / 2 + 6) * u, Offset(l.x * u, l.y * u), style = dash)
             } else {
                 val (w, h) = l.box()
@@ -250,10 +252,10 @@ private fun FaceCanvas(state: EditorState, modifier: Modifier) {
 
 /** Static thumbnail of a design (presets, saved): 92dp tall, as wide as its aspect needs (max 150dp). */
 @Composable
-private fun FaceThumb(doc: FaceDoc, assets: DocAssets) {
+internal fun FaceThumb(doc: FaceDoc, assets: DocAssets, height: androidx.compose.ui.unit.Dp = 92.dp) {
     val measurer = rememberTextMeasurer()
     val aspect = doc.w / doc.h
-    val mod = if (aspect > 1.6f) Modifier.width(150.dp).aspectRatio(aspect) else Modifier.height(92.dp).aspectRatio(aspect)
+    val mod = if (aspect > 1.6f) Modifier.width(height * 1.63f).aspectRatio(aspect) else Modifier.height(height).aspectRatio(aspect)
     Canvas(mod) { drawDoc(doc, Color(doc.background), measurer, ThumbTime, assets) }
 }
 
@@ -266,13 +268,14 @@ private val ThumbTime = LocalDateTime.of(2026, 10, 28, 10, 8, 32)
  * cache, downloaded on first use (reading [Iconify.version] redraws when they arrive).
  */
 @Composable
-private fun rememberAssets(): DocAssets {
+internal fun rememberAssets(): DocAssets {
     val ctx = LocalContext.current
     return remember {
         val cache = HashMap<String, ImageBitmap?>()
         DocAssets(
             image = { name -> cache.getOrPut(name) { ImageAssets.load(ctx, name)?.asImageBitmap() } },
             icon = { id -> Iconify.version; Iconify.art(ctx, id) },
+            hand = { l, part -> com.ohav.pixelforge.forge.HandArt.bitmap(l, part, 2f).asImageBitmap() },
         )
     }
 }
@@ -289,6 +292,8 @@ private fun LayerKind.icon(): ImageVector = when (this) {
     LayerKind.IMAGE -> Icons.Outlined.Image
     LayerKind.CIRCLE -> Icons.Filled.Circle
     LayerKind.RECT -> Icons.Outlined.CropSquare
+    LayerKind.DATA -> Icons.Outlined.MonitorHeart
+    LayerKind.GAUGE -> Icons.Outlined.Speed
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -352,7 +357,7 @@ private fun AddPanel(state: EditorState, onAdded: () -> Unit) {
     Text("שכבה חדשה", fontWeight = FontWeight.SemiBold)
     Spacer(Modifier.height(8.dp))
     // Widgets bake everything but time/date into a picture, so moving hands make no sense there.
-    val kinds = LayerKind.entries.filter { isFace || it != LayerKind.HANDS }
+    val kinds = LayerKind.entries.filter { isFace || (it != LayerKind.HANDS && it != LayerKind.DATA && it != LayerKind.GAUGE) }
     kinds.chunked(3).forEachIndexed { row, items ->
         Row(Modifier.fillMaxWidth().padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             items.forEachIndexed { i, k ->
@@ -420,6 +425,18 @@ private fun StylePanel(state: EditorState) {
             Spacer(Modifier.height(8.dp))
         }
         val alpha = (l.color ushr 24 and 0xFF) / 255f
+        if (l.kind == LayerKind.DATA || l.kind == LayerKind.GAUGE) {
+            Text("מקור נתון", Modifier.enter(1), fontWeight = FontWeight.SemiBold)
+            Row(Modifier.enter(1).horizontalScroll(rememberScrollState()).padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                DataSource.entries.forEach { d -> FilterChip(l.text == d.name, { state.editLayer(l.id) { it.copy(text = d.name) } }, { Text(d.title) }) }
+            }
+        }
+        if (l.kind == LayerKind.HANDS) {
+            Text("סגנון מחוגים", Modifier.enter(1), fontWeight = FontWeight.SemiBold)
+            Row(Modifier.enter(1).horizontalScroll(rememberScrollState()).padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                (listOf("") + HandStyles).forEach { h -> FilterChip(l.text == h, { state.editLayer(l.id) { it.copy(text = h) } }, { Text(h.ifEmpty { "פשוט" }) }) }
+            }
+        }
         if (l.kind == LayerKind.ICON) IconPicker(l.text, Color(l.color or 0xFF000000)) { n -> state.editLayer(l.id) { it.copy(text = n) } }
         if (l.kind != LayerKind.IMAGE) Swatches("צבע", Palette, l.color or 0xFF000000, 2) { c -> state.editLayer(l.id) { it.copy(color = withAlpha(c, alpha)) } }
         LabeledSlider("אטימות", alpha * 100, 5f..100f, state, 2) { v -> state.updateLayer(l.id) { it.copy(color = withAlpha(it.color, v / 100)) } }
@@ -438,6 +455,8 @@ private fun StylePanel(state: EditorState) {
             LayerKind.RECT -> "רוחב" to 10f..450f
             LayerKind.ICON -> "גודל" to 12f..300f
             LayerKind.IMAGE -> "גודל" to 30f..450f
+            LayerKind.DATA -> "גודל" to 12f..80f
+            LayerKind.GAUGE -> (if (l.extra) "אורך" else "רדיוס") to 10f..225f
         }
         val range = baseRange.start..baseRange.endInclusive * k
         LabeledSlider(sizeLabel, l.size, range, state, 3) { v ->
@@ -446,10 +465,10 @@ private fun StylePanel(state: EditorState) {
         }
         if (l.kind == LayerKind.IMAGE) LabeledSlider("פינות", l.thickness, 0f..(minOf(l.size, l.height) / 2), state, 4) { v -> state.updateLayer(l.id) { it.copy(thickness = v) } }
         if (l.kind == LayerKind.RECT) LabeledSlider("גובה", l.height, 6f..450f * k, state, 4) { v -> state.updateLayer(l.id) { it.copy(height = v) } }
-        if (l.kind in listOf(LayerKind.RING, LayerKind.ARC, LayerKind.TICKS, LayerKind.HANDS)) {
+        if (l.kind in listOf(LayerKind.RING, LayerKind.ARC, LayerKind.TICKS, LayerKind.HANDS, LayerKind.GAUGE)) {
             LabeledSlider("עובי", l.thickness, 1f..60f, state, 4) { v -> state.updateLayer(l.id) { it.copy(thickness = v) } }
         }
-        if (l.kind == LayerKind.ARC) {
+        if (l.kind == LayerKind.ARC || l.kind == LayerKind.GAUGE) {
             LabeledSlider("התחלה", l.angle, 0f..360f, state, 4) { v -> state.updateLayer(l.id) { it.copy(angle = v) } }
             LabeledSlider("אורך", l.height, 5f..360f, state, 4) { v -> state.updateLayer(l.id) { it.copy(height = v) } }
         }
@@ -469,9 +488,9 @@ private fun StylePanel(state: EditorState) {
         if (l.kind == LayerKind.TEXT || l.kind == LayerKind.RECT || l.kind.isImage) {
             LabeledSlider("סיבוב", l.rotation, -180f..180f, state, 5) { v -> state.updateLayer(l.id) { it.copy(rotation = v) } }
         }
-        if (l.kind == LayerKind.TIME || l.kind == LayerKind.HANDS) {
+        if (l.kind == LayerKind.TIME || l.kind == LayerKind.HANDS || l.kind == LayerKind.GAUGE) {
             Row(Modifier.enter(5), verticalAlignment = Alignment.CenterVertically) {
-                Text(if (l.kind == LayerKind.TIME) "הצג שניות" else "מחוג שניות", Modifier.weight(1f))
+                Text(when (l.kind) { LayerKind.TIME -> "הצג שניות"; LayerKind.GAUGE -> "מחט (במקום קשת)"; else -> "מחוג שניות" }, Modifier.weight(1f))
                 Switch(l.extra, { b -> state.editLayer(l.id) { it.copy(extra = b) } })
             }
         }
