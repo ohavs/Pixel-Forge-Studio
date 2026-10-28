@@ -16,6 +16,11 @@ fun signingValue(env: String, key: String): String? = System.getenv(env) ?: loca
 // versionCode = CI run number (local builds default to 1).
 val buildNumber = (System.getenv("BUILD_NUMBER") ?: localSigning.getProperty("buildNumber") ?: "1").toInt()
 
+// Template watch face (+ CI token) the phone customizes and pushes to the watch.
+val wfAssets = layout.buildDirectory.dir("wf/assets").get().asFile
+@Suppress("UNCHECKED_CAST")
+val prepareTemplate = (rootProject.extra["watchFaceAssetTask"] as (Project, String, String, File) -> TaskProvider<Task>)(project, "custom", "custom_template", wfAssets)
+
 android {
     namespace = "com.ohav.pixelforge"
     compileSdk = 36
@@ -28,6 +33,8 @@ android {
         versionName = "1.0.$buildNumber"
         buildConfigField("String", "GITHUB_REPO", "\"${System.getenv("GITHUB_REPOSITORY") ?: localSigning.getProperty("githubRepo") ?: "ohavs/Pixel-Forge-Studio"}\"")
     }
+
+    sourceSets["main"].assets.srcDir(wfAssets)
 
     signingConfigs {
         create("release") {
@@ -72,6 +79,8 @@ kotlin {
     jvmToolchain(17)
 }
 
+tasks.named("preBuild") { dependsOn(prepareTemplate) }
+
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2025.12.01")
     implementation(composeBom)
@@ -84,4 +93,8 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.11.0")
     implementation("androidx.core:core-ktx:1.17.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.4")
+    implementation("com.google.android.gms:play-services-wearable:19.0.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2")
+    implementation("com.android.tools.build:apksig:8.13.2")
+    implementation("com.google.android.wearable.watchface.validator:validator-push-android:1.0.0-alpha10")
 }

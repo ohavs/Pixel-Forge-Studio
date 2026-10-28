@@ -26,7 +26,7 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 @Composable
-fun HomeScreen(onSettings: () -> Unit) {
+fun HomeScreen(onSettings: () -> Unit, onWatchFaces: () -> Unit) {
     Column(
         Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
             .systemBarsPadding().verticalScroll(rememberScrollState()).padding(20.dp),
@@ -38,7 +38,7 @@ fun HomeScreen(onSettings: () -> Unit) {
         Text("סטודיו", Modifier.enter(1), fontSize = 38.sp, fontWeight = FontWeight.Bold)
         Text("עצב מאפס, מקצה לקצה", Modifier.enter(2), color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(24.dp))
-        StudioCard("Watch Faces", "פני שעון ל-Galaxy Watch", listOf(Violet, Cyan), true, Modifier.enter(3)) {}
+        StudioCard("Watch Faces", "פני שעון ל-Galaxy Watch", listOf(Violet, Cyan), true, Modifier.enter(3), onWatchFaces)
         Spacer(Modifier.height(14.dp))
         StudioCard("Widgets", "ווידג'טים לטלפון · בקרוב", listOf(Color(0xFFFF7A59), Color(0xFFFF3D8B)), false, Modifier.enter(4)) {}
     }
@@ -60,9 +60,9 @@ private fun StudioCard(title: String, subtitle: String, colors: List<Color>, ena
             drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = .35f), Color.Transparent), Offset(size.width * (.5f + .4f * cos(t)), size.height * (.5f + .4f * sin(t * 2))), r * .7f), r * .7f, Offset(size.width * (.5f + .4f * cos(t)), size.height * (.5f + .4f * sin(t * 2))))
             drawCircle(Brush.radialGradient(listOf(c.last().copy(alpha = .6f), Color.Transparent), Offset(size.width * (.5f - .35f * sin(t)), size.height * (.5f + .3f * cos(t))), r * .8f), r * .8f, Offset(size.width * (.5f - .35f * sin(t)), size.height * (.5f + .3f * cos(t))))
         }
-        Column(Modifier.align(Alignment.BottomStart).padding(22.dp)) {
-            Text(title, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
-            Text(subtitle, color = Color.White.copy(alpha = .88f))
+        Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(22.dp)) {
+            Text(title, Modifier.fillMaxWidth(), color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+            Text(subtitle, Modifier.fillMaxWidth(), color = Color.White.copy(alpha = .88f))
         }
     }
 }

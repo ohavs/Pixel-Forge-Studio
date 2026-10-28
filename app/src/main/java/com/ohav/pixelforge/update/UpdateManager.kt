@@ -37,7 +37,7 @@ object UpdateManager {
             val tag = json.getString("tag_name").removePrefix("v")
             val assets = json.getJSONArray("assets")
             val apk = (0 until assets.length()).map { assets.getJSONObject(it) }
-                .firstOrNull { it.getString("name").endsWith(".apk") } ?: error("no APK in release")
+                .let { list -> list.firstOrNull { it.getString("name") == "pixel-forge.apk" } ?: list.firstOrNull { it.getString("name").endsWith(".apk") && !it.getString("name").contains("wear") } } ?: error("no APK in release")
             val dm = (0 until assets.length()).map { assets.getJSONObject(it) }.firstOrNull { it.getString("name").endsWith(".dm") }
             Release(
                 versionName = tag,
