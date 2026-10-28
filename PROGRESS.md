@@ -10,7 +10,11 @@
 - 0b עדיין לא נבדק על השעון: להתקין `wear-pixel-forge.apk` בשעון (ADB אלחוטי) → "Watch Faces" → כפתור שליחה. שגיאות מוצגות מתחת לסרגל העליון.
 - לוגו: Orbit Studio (מ-Canva, משוחזר כוקטור: `design/logo/orbit-final/logo.py` מייצר את `ic_fg/ic_bg/ic_mono` בשתי האפליקציות). המשתמש: "בעתיד נשנה". ה-skill `logo-design` הוסר לבקשתו.
 
-## מחולל Forge (G1, 2026-10-28) — הכיוון המרכזי
+## ⏸ מושהה (2026-10-28)
+המשתמש עצר: "פספסנו את כל המטרה וזה מתחיל להתבלגן". יחזור כשיהיו לו skills וספריות מתאימים. לא להמשיך את Forge בלי לדבר איתו קודם על הכיוון.
+- מצב: v1.0.21 כולל את Forge (נבנה ב-CI, לא נבדק במכשיר). `art-preview.yml` מרנדר דוגמאות ב-Robolectric ודוחף לענף `art-preview` (artifacts של Actions חסומים בקונטיינר) — התוצרים עוד לא נבדקו ויזואלית.
+
+## מחולל Forge (G1, 2026-10-28)
 - המשתמש דחה את התבניות (פשוטות, משוכפלות בצבעים, אימוג'י וקווים). רוצה: מחולל שבונה פנים/ווידג'טים יפים ומורכבים מראש + AI לתמונות בגודל מדויק + ספריות נכסים גדולות.
 - בחירות המשתמש: AI = שילוב (Pollinations חינמי כברירת מחדל, Gemini כשיש מפתח); סגנונות: יוקרה, ספורט/Ultra, אמנותי, סייברפאנק; ספריות: Google Fonts מלא, טקסטורות CC0, וקטורים; שליטה: מתכון + 6 וריאציות.
 - קוד: `forge/Forge.kt` (Style/Pal/Recipe + פריסות), `forge/DialArt.kt` (גימורים: sunburst, guilloché, clous de Paris, carbon, brushed, hex, grid, waves, aurora, photo; אינדקסים מוצמדים עם צל ולום; בזלים diver/tachy/compass/24h/segment; תתי-דיאלים; מדים; חלון תאריך; פאנלים לווידג'ט), `forge/HandArt.kt` (7 סגנונות מחוגים כתמונה), `forge/Sources.kt` (GoogleFonts, AiImages + מונה יומי, Textures/Poly Haven), `ui/ForgePanel.kt` (לשונית "מחולל" ראשונה בעורך).
