@@ -10,7 +10,20 @@
 - 0b עדיין לא נבדק על השעון: להתקין `wear-pixel-forge.apk` בשעון (ADB אלחוטי) → "Watch Faces" → כפתור שליחה. שגיאות מוצגות מתחת לסרגל העליון.
 - לוגו: Orbit Studio (מ-Canva, משוחזר כוקטור: `design/logo/orbit-final/logo.py` מייצר את `ic_fg/ic_bg/ic_mono` בשתי האפליקציות). המשתמש: "בעתיד נשנה". ה-skill `logo-design` הוסר לבקשתו.
 
-## ⏸ מושהה (2026-10-28)
+## עורך חדש — ספריות (2026-10-28, v1.0.26)
+- המשתמש: "שינוי רציני בעורך" — מסורבל, pills גלילה אופקית, שכבות בסיסיות. החליף לספריות + עיצוב iOS מודרני (glass קל, לא העיקר).
+- מבנה: סרגל עליון (חזרה · בטל/בצע שוב בקפסולה · שלח/הוסף לבן), במה עם הילה, קפסולת פעולות לשכבה נבחרת, פאנל מתקפל, Dock צף 4 לשוניות: ספריות / שכבות / עיצוב / קנבס. אין גלילה אופקית: FlowRow, Segmented, BarSlider (סגנון control center).
+- קבצים: `ui/Glass.kt` (טוקנים `Ui` + רכיבים), `ui/LibraryPanel.kt`, `ui/EditorScreen.kt`, `editor/Library.kt` (ספריות, Poly Haven, RemoteImages, Elements), `editor/Generators.kt` (10 רקעים בסגנון Haikei, 8 פלטות, seed).
+- ספריות: רכיבי שעון, רקעים מחוללים, 3D Icons, Fluent Emoji 3D (1,594), Meteocons, Tabler (קטגוריות רשמיות), Sci-Fi UI (Kenney), טקסטורות (Poly Haven), וקטורים (Phosphor/Solar/Noto/Game/דגלים… במקום SVG Repo), התמונות שלי.
+- הורדה לפי דרישה: קטלוגים בענף `assets` (נבנה ע"י `tools/assets/build.py` + `assets.yml`), תמונות מהמקור, קאש במכשיר. ה-APK לא גדל.
+- תמונת ספרייה → שכבת IMAGE (`lib~שם~ts.png`), רקע → IMAGE נעולה בתחתית.
+- Forge והתבניות הוצאו מהעורך (הקוד נשאר, `ForgePanel.kt` לא בשימוש).
+- 3dicons: אין API; ניסיון לחלץ מפתח Supabase מהאתר נחסם (בצדק). נבנה מחבילה רשמית ש-המשתמש מעלה ל-Release `asset-sources` כ-`3dicons.zip`.
+- Figma Community: דולג (דורש התחברות + רישיון לכל קובץ). Haikei → מחוללים פנימיים.
+- Skills: נוסף `frontend-design`. canvas-design / skill-creator זמינים כ-skills מובנים (anthropic-skills).
+- לא נבדק במכשיר עדיין.
+
+## ⏸ Forge מושהה (2026-10-28)
 המשתמש עצר: "פספסנו את כל המטרה וזה מתחיל להתבלגן". יחזור כשיהיו לו skills וספריות מתאימים. לא להמשיך את Forge בלי לדבר איתו קודם על הכיוון.
 - מצב: v1.0.21 כולל את Forge (נבנה ב-CI, לא נבדק במכשיר). `art-preview.yml` מרנדר דוגמאות ב-Robolectric ודוחף לענף `art-preview` (artifacts של Actions חסומים בקונטיינר) — התוצרים עוד לא נבדקו ויזואלית.
 
