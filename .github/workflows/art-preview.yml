@@ -8,6 +8,7 @@ on:
     paths:
       - 'app/src/main/java/com/ohav/pixelforge/forge/**'
       - 'app/src/test/**'
+      - '.github/workflows/art-preview.yml'
   workflow_dispatch:
 
 permissions:
