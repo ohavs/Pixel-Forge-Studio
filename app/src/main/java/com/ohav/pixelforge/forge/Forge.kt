@@ -174,7 +174,7 @@ object Forge {
 
     // ---------- watch faces ----------
 
-    private fun faceLayout(
+    internal fun faceLayout(
         r: Recipe, pal: Pal, rnd: Random, font: Typeface, font2: Typeface, texture: Texture, photo: Bitmap?, tint: Float, seed: Int, out: MutableList<Layer>,
     ): ArtSpec {
         val st = r.style
@@ -280,7 +280,7 @@ object Forge {
 
     // ---------- widgets ----------
 
-    private fun widgetLayout(
+    internal fun widgetLayout(
         r: Recipe, pal: Pal, rnd: Random, font: Typeface, font2: Typeface, texture: Texture, photo: Bitmap?, tint: Float, seed: Int, doc: FaceDoc, out: MutableList<Layer>,
     ): ArtSpec {
         val st = r.style

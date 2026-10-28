@@ -10,6 +10,15 @@
 - 0b עדיין לא נבדק על השעון: להתקין `wear-pixel-forge.apk` בשעון (ADB אלחוטי) → "Watch Faces" → כפתור שליחה. שגיאות מוצגות מתחת לסרגל העליון.
 - לוגו: Orbit Studio (מ-Canva, משוחזר כוקטור: `design/logo/orbit-final/logo.py` מייצר את `ic_fg/ic_bg/ic_mono` בשתי האפליקציות). המשתמש: "בעתיד נשנה". ה-skill `logo-design` הוסר לבקשתו.
 
+## מחולל Forge (G1, 2026-10-28) — הכיוון המרכזי
+- המשתמש דחה את התבניות (פשוטות, משוכפלות בצבעים, אימוג'י וקווים). רוצה: מחולל שבונה פנים/ווידג'טים יפים ומורכבים מראש + AI לתמונות בגודל מדויק + ספריות נכסים גדולות.
+- בחירות המשתמש: AI = שילוב (Pollinations חינמי כברירת מחדל, Gemini כשיש מפתח); סגנונות: יוקרה, ספורט/Ultra, אמנותי, סייברפאנק; ספריות: Google Fonts מלא, טקסטורות CC0, וקטורים; שליטה: מתכון + 6 וריאציות.
+- קוד: `forge/Forge.kt` (Style/Pal/Recipe + פריסות), `forge/DialArt.kt` (גימורים: sunburst, guilloché, clous de Paris, carbon, brushed, hex, grid, waves, aurora, photo; אינדקסים מוצמדים עם צל ולום; בזלים diver/tachy/compass/24h/segment; תתי-דיאלים; מדים; חלון תאריך; פאנלים לווידג'ט), `forge/HandArt.kt` (7 סגנונות מחוגים כתמונה), `forge/Sources.kt` (GoogleFonts, AiImages + מונה יומי, Textures/Poly Haven), `ui/ForgePanel.kt` (לשונית "מחולל" ראשונה בעורך).
+- מודל: `LayerKind.DATA` (ערך חי), `GAUGE` (קשת/מחט לפי `DataSource`), HANDS עם `text`=סגנון → 3 slots. `FaceXml.slots()` מחליף את `imageLayers`. facecheck עובר (כולל Styled).
+- האמנות נאפית ל-PNG אחד (900px) כשכבת IMAGE נעולה; החלקים החיים נשארים שכבות.
+- פונט Google רק באמנות האפויה; השעה החיה בשעון עדיין SYNC_TO_DEVICE (G2: BitmapFont).
+- רשת הקונטיינר: Poly Haven/Openverse/Pollinations חסומים לבדיקה; Google Fonts CSS עובד. Robolectric (NATIVE graphics) ב-scratch לרינדור תצוגות — Maven Central זורק 429 לפעמים.
+
 ## נכסים ותבניות (2026-10-28)
 - Iconify (`editor/Iconify.kt`): חיפוש/עיון ב-200K+ אייקונים, 13 ספריות נבחרות (אימוג'י 3D, Noto, מזג אוויר, דגלים, Phosphor…). מזהה שכבה `prefix:name`, SVG נשמר ב-`filesDir/icons`, רינדור AndroidSVG. חד-צבעי (currentColor) נצבע בצבע השכבה; צבעוני נשאר.
 - Iconify חסום ברשת הקונטיינר; npm פתוח → `npm pack @iconify-json/<set>` לבדיקת שמות אייקונים.

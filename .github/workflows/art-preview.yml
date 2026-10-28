@@ -1,0 +1,31 @@
+name: Art preview
+
+# Renders sample generator output (faces + widgets) with Robolectric native graphics and uploads
+# the PNGs, so the art can be reviewed without a phone.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/src/main/java/com/ohav/pixelforge/forge/**'
+      - 'app/src/test/**'
+  workflow_dispatch:
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Render
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon :app:testDebugUnitTest --tests '*ArtPreviewTest*'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: art
+          path: app/build/art

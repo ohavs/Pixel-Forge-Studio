@@ -60,6 +60,11 @@ android {
         }
     }
 
+    testOptions.unitTests.all {
+        it.systemProperty("robolectric.graphicsMode", "NATIVE")
+        it.systemProperty("artOut", layout.buildDirectory.dir("art").get().asFile.path)
+    }
+
     lint {
         checkReleaseBuilds = false
         abortOnError = false
@@ -84,6 +89,8 @@ tasks.named("preBuild") { dependsOn(prepareTemplate) }
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2025.12.01")
     implementation(composeBom)
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.14.1")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
