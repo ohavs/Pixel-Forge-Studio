@@ -1,6 +1,7 @@
 package com.ohav.pixelforge.ui
 
 import android.content.Context
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -29,13 +30,13 @@ fun SettingsScreen(onBack: () -> Unit) {
         Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
             .systemBarsPadding().verticalScroll(rememberScrollState()).padding(20.dp),
     ) {
-        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "חזרה") }
-        Text("הגדרות", fontSize = 30.sp, fontWeight = FontWeight.Bold)
+        IconButton(onClick = onBack, modifier = Modifier.enter(0)) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "חזרה") }
+        Text("הגדרות", Modifier.enter(1), fontSize = 30.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(20.dp))
 
-        Section("עדכונים") { UpdateRow() }
+        Section("עדכונים", 2) { UpdateRow() }
         Spacer(Modifier.height(14.dp))
-        Section("מפתח AI") {
+        Section("מפתח Gemini", 3) {
             var key by remember { mutableStateOf(prefs.getString("ai_key", "") ?: "") }
             Text("נשמר רק במכשיר. ללא מפתח, יצירה ב-AI כבויה.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
             Spacer(Modifier.height(8.dp))
@@ -51,8 +52,8 @@ fun SettingsScreen(onBack: () -> Unit) {
 }
 
 @Composable
-private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) {
-    Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface, RoundedCornerShape(24.dp)).padding(18.dp)) {
+private fun Section(title: String, index: Int, content: @Composable ColumnScope.() -> Unit) {
+    Column(Modifier.enter(index).animateContentSize().fillMaxWidth().background(MaterialTheme.colorScheme.surface, RoundedCornerShape(24.dp)).padding(18.dp)) {
         Text(title, fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
         Spacer(Modifier.height(8.dp))
         content()
