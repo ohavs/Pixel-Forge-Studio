@@ -1,0 +1,6 @@
+tabler {'Filled': 1054, 'System': 784, 'Devices': 363, 'Design': 353, 'Arrows': 334, 'Map': 266, 'Letters': 214, 'Document': 211, 'Numbers': 196, 'Text': 194, 'Shapes': 187, 'Media': 161, 'E-commerce': 155, 'Communication': 121, 'Food': 96, 'Buildings': 95, 'Vehicles': 90, 'Math': 88, 'Health': 87, 'Sport': 76, 'Currencies': 76, 'Development': 65, 'Weather': 61, 'Photography': 52, 'Mood': 52, 'Nature': 50, 'Games': 48, 'Computers': 44, 'Database': 42, 'Laundry': 40, 'Charts': 39, 'Symbols': 37, 'Badges': 22, 'Version control': 20, 'Animals': 19, 'Electrical': 19, 'Gender': 18, 'Gestures': 17, 'Extensions': 13, 'Zodiac': 12, 'Logic': 8, 'Brand': 378}
+meteocons {'Sun': 17, 'Night': 53, 'Clouds': 50, 'Rain': 15, 'Snow': 17, 'Storm': 8, 'Wind': 19, 'Temperature': 19, 'More': 27, 'Line': 225}
+vectors {'Phosphor': 1526, 'Solar': 1508, 'Game icons': 4134, 'Noto': 3819, 'Streamline': 787, 'Flat color': 329, 'Fluent color': 890, 'Flags': 493, 'Material': 3548}
+fluent3d groups: {'Activities': 85, 'Symbols': 223, 'Objects': 260, 'Travel & Places': 218, 'Smileys & Emotion': 169, 'Food & Drink': 136, 'People & Body': 343, 'Animals & Nature': 152, 'Flags': 8}
+FAILED kenney <HTTPError 404: 'Not Found'>
+FAILED threedicons <HTTPError 404: 'Not Found'>
