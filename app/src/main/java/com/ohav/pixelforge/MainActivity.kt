@@ -6,6 +6,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import com.ohav.pixelforge.ui.HomeScreen
 import com.ohav.pixelforge.ui.SettingsScreen
 import com.ohav.pixelforge.ui.StudioTheme
