@@ -1,7 +1,7 @@
 # PROGRESS
 
 ## Now
-שלב 0 — שלד אפליקציה + עדכון עצמי (נבנה), הבא: בדיקת היתכנות Watch Face Push.
+שלב 0b — בדיקת היתכנות Watch Face Push (0a ✅, Release v1.0.5 עובד).
 
 ## Secrets (שמות בלבד)
 KEYSTORE_BASE64, KEYSTORE_PASSWORD, AI_API_KEY
