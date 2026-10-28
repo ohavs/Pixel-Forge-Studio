@@ -1,5 +1,8 @@
 package com.ohav.pixelforge.ui
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
@@ -35,7 +38,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.rotate
@@ -94,7 +103,10 @@ fun EditorScreen(onBack: () -> Unit) {
         busy = true
         status = "בונה פני שעון…"
         status = try {
-            val face = withContext(Dispatchers.IO) { FaceBuilder.build(ctx, FaceXml.build(state.doc)) }
+            val doc = state.doc
+            val face = withContext(Dispatchers.IO) {
+                FaceBuilder.build(ctx, FaceXml.build(doc), FaceXml.imageLayers(doc).map { ImageAssets.render(ctx, it) })
+            }
             status = "שולח לשעון…"
             WatchLink.push(ctx, face)
         } catch (e: Throwable) {
@@ -144,6 +156,7 @@ private fun FaceCanvas(state: EditorState, modifier: Modifier) {
     LaunchedEffect(Unit) { while (true) { now = LocalDateTime.now(); delay(1000L - now.nano / 1_000_000) } }
     val pulse by rememberInfiniteTransition(label = "sel").animateFloat(.45f, 1f, infiniteRepeatable(tween(800), RepeatMode.Reverse), label = "p")
     val bg by animateColorAsState(Color(state.doc.background), tween(350), label = "bg")
+    val images = rememberImages()
     var guideX by remember { mutableStateOf(false) }
     var guideY by remember { mutableStateOf(false) }
     var dragId by remember { mutableStateOf<Long?>(null) }
@@ -183,7 +196,7 @@ private fun FaceCanvas(state: EditorState, modifier: Modifier) {
     ) {
         val u = size.minDimension / FACE_SIZE
         drawCircle(Color(0xFF2A2D36), radius = size.minDimension / 2 + 6.dp.toPx())
-        drawFace(state.doc, bg, measurer, now)
+        drawFace(state.doc, bg, measurer, now, images)
         val guide = Color(0xFFFF3D8B)
         if (guideX) drawLine(guide, Offset(size.width / 2, 0f), Offset(size.width / 2, size.height), 1.dp.toPx())
         if (guideY) drawLine(guide, Offset(0f, size.height / 2), Offset(size.width, size.height / 2), 1.dp.toPx())
@@ -203,7 +216,7 @@ private fun FaceCanvas(state: EditorState, modifier: Modifier) {
 private val Weights = listOf(FontWeight.Thin, FontWeight.Light, FontWeight.Normal, FontWeight.Medium, FontWeight.Bold)
 
 /** Draws [doc] scaled into this (square) draw area, clipped to the watch circle; mirrors [FaceXml]. */
-private fun DrawScope.drawFace(doc: FaceDoc, bg: Color, measurer: TextMeasurer, now: LocalDateTime) {
+private fun DrawScope.drawFace(doc: FaceDoc, bg: Color, measurer: TextMeasurer, now: LocalDateTime, images: (String) -> ImageBitmap?) {
     val u = size.minDimension / FACE_SIZE
     val date = now.format(DateTimeFormatter.ofPattern("EEE d", Locale.ENGLISH))
     clipPath(Path().apply { addOval(androidx.compose.ui.geometry.Rect(Offset.Zero, size)) }) {
@@ -238,6 +251,28 @@ private fun DrawScope.drawFace(doc: FaceDoc, bg: Color, measurer: TextMeasurer, 
                     if (l.extra) hand(now.second * 6f, r * 1.08f, maxOf(t * .35f, 2f * u), accent)
                     drawCircle(accent, t * .9f, center)
                 }
+                LayerKind.ICON -> rotate(l.rotation, center) {
+                    val s = l.size * u / IconLibrary.VIEWPORT
+                    withTransform({ translate(center.x - l.size * u / 2, center.y - l.size * u / 2); scale(s, s, Offset.Zero) }) {
+                        IconLibrary.paths(l.text).forEach { drawPath(it, c) }
+                    }
+                }
+                LayerKind.IMAGE -> rotate(l.rotation, center) {
+                    val w = l.size * u; val h = l.height * u
+                    val tl = Offset(center.x - w / 2, center.y - h / 2)
+                    val img = images(l.text)
+                    val clip = Path().apply { addRoundRect(RoundRect(tl.x, tl.y, tl.x + w, tl.y + h, CornerRadius(l.thickness * u))) }
+                    clipPath(clip) {
+                        if (img == null) drawRect(Color.Gray.copy(alpha = .3f), tl, Size(w, h))
+                        else {
+                            val src = ImageAssets.centerCrop(img.width, img.height, w, h)
+                            drawImage(
+                                img, IntOffset(src.left, src.top), IntSize(src.width(), src.height()),
+                                IntOffset(tl.x.toInt(), tl.y.toInt()), IntSize(w.toInt(), h.toInt()), alpha = c.alpha,
+                            )
+                        }
+                    }
+                }
                 LayerKind.CIRCLE -> drawCircle(brush, r, center)
                 LayerKind.RECT -> rotate(l.rotation, center) {
                     drawRoundRect(brush, Offset(center.x - r / 2, center.y - l.height * u / 2), Size(r, l.height * u), CornerRadius(l.thickness * u))
@@ -260,10 +295,18 @@ private fun DrawScope.drawFace(doc: FaceDoc, bg: Color, measurer: TextMeasurer, 
 @Composable
 private fun FaceThumb(doc: FaceDoc, modifier: Modifier) {
     val measurer = rememberTextMeasurer()
-    Canvas(modifier) { drawFace(doc, Color(doc.background), measurer, ThumbTime) }
+    Canvas(modifier) { drawFace(doc, Color(doc.background), measurer, ThumbTime) { null } }
 }
 
 private val ThumbTime = LocalDateTime.of(2026, 10, 28, 10, 8, 32)
+
+/** Imported pictures for the live preview, decoded once per file name. */
+@Composable
+private fun rememberImages(): (String) -> ImageBitmap? {
+    val ctx = LocalContext.current
+    val cache = remember { HashMap<String, ImageBitmap?>() }
+    return { name -> cache.getOrPut(name) { ImageAssets.load(ctx, name)?.asImageBitmap() } }
+}
 
 private fun LayerKind.icon(): ImageVector = when (this) {
     LayerKind.TIME -> Icons.Outlined.Schedule
@@ -273,12 +316,24 @@ private fun LayerKind.icon(): ImageVector = when (this) {
     LayerKind.ARC -> Icons.Outlined.DataUsage
     LayerKind.TICKS -> Icons.Outlined.Timer
     LayerKind.HANDS -> Icons.Outlined.AccessTime
+    LayerKind.ICON -> Icons.Outlined.EmojiEmotions
+    LayerKind.IMAGE -> Icons.Outlined.Image
     LayerKind.CIRCLE -> Icons.Filled.Circle
     LayerKind.RECT -> Icons.Outlined.CropSquare
 }
 
 @Composable
 private fun AddPanel(state: EditorState, onAdded: () -> Unit) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) scope.launch {
+            val (name, aspect) = withContext(Dispatchers.IO) { ImageAssets.import(ctx, uri) }
+            val w = if (aspect >= 1) 220f else 220f * aspect
+            state.add(Layer.create(LayerKind.IMAGE, 0, 0).copy(text = name, size = w, height = w / aspect, thickness = 24f, color = 0xFFFFFFFF))
+            onAdded()
+        }
+    }
     Text("תבניות", fontWeight = FontWeight.SemiBold)
     Spacer(Modifier.height(8.dp))
     Row(Modifier.horizontalScroll(rememberScrollState()).padding(bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -299,7 +354,10 @@ private fun AddPanel(state: EditorState, onAdded: () -> Unit) {
                 Column(
                     Modifier.weight(1f).enter(row * 3 + i).pressScale(src).clip(RoundedCornerShape(20.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .clickable(src, null) { state.add(k, 0xFF8B7BFF); onAdded() }.padding(vertical = 18.dp),
+                        .clickable(src, null) {
+                            if (k == LayerKind.IMAGE) pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                            else { state.add(k, 0xFF8B7BFF); onAdded() }
+                        }.padding(vertical = 18.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Icon(k.icon(), null, tint = Violet)
@@ -354,9 +412,10 @@ private fun StylePanel(state: EditorState) {
             Spacer(Modifier.height(8.dp))
         }
         val alpha = (l.color ushr 24 and 0xFF) / 255f
-        Swatches("צבע", Palette, l.color or 0xFF000000, 2) { c -> state.editLayer(l.id) { it.copy(color = withAlpha(c, alpha)) } }
+        if (l.kind == LayerKind.ICON) IconPicker(l.text) { n -> state.editLayer(l.id) { it.copy(text = n) } }
+        if (l.kind != LayerKind.IMAGE) Swatches("צבע", Palette, l.color or 0xFF000000, 2) { c -> state.editLayer(l.id) { it.copy(color = withAlpha(c, alpha)) } }
         LabeledSlider("אטימות", alpha * 100, 5f..100f, state, 2) { v -> state.updateLayer(l.id) { it.copy(color = withAlpha(it.color, v / 100)) } }
-        if (l.kind != LayerKind.TICKS && !l.kind.isText) {
+        if (l.kind != LayerKind.TICKS && !l.kind.isText && !l.kind.isImage) {
             val secondLabel = if (l.kind == LayerKind.HANDS) "מחוג שניות" else "גרדיאנט (צבע שני)"
             Swatches(secondLabel, listOf(0L) + Palette, l.color2, 2) { c -> state.editLayer(l.id) { it.copy(color2 = c) } }
         }
@@ -367,8 +426,14 @@ private fun StylePanel(state: EditorState) {
             LayerKind.HANDS -> "אורך" to 40f..225f
             LayerKind.CIRCLE -> "רדיוס" to 4f..225f
             LayerKind.RECT -> "רוחב" to 10f..450f
+            LayerKind.ICON -> "גודל" to 12f..300f
+            LayerKind.IMAGE -> "גודל" to 30f..450f
         }
-        LabeledSlider(sizeLabel, l.size, range, state, 3) { v -> state.updateLayer(l.id) { it.copy(size = v) } }
+        LabeledSlider(sizeLabel, l.size, range, state, 3) { v ->
+            // Images keep their aspect ratio.
+            state.updateLayer(l.id) { if (it.kind == LayerKind.IMAGE) it.copy(size = v, height = v * it.height / it.size) else it.copy(size = v) }
+        }
+        if (l.kind == LayerKind.IMAGE) LabeledSlider("פינות", l.thickness, 0f..(minOf(l.size, l.height) / 2), state, 4) { v -> state.updateLayer(l.id) { it.copy(thickness = v) } }
         if (l.kind == LayerKind.RECT) LabeledSlider("גובה", l.height, 6f..450f, state, 4) { v -> state.updateLayer(l.id) { it.copy(height = v) } }
         if (l.kind in listOf(LayerKind.RING, LayerKind.ARC, LayerKind.TICKS, LayerKind.HANDS)) {
             LabeledSlider("עובי", l.thickness, 1f..60f, state, 4) { v -> state.updateLayer(l.id) { it.copy(thickness = v) } }
@@ -390,7 +455,7 @@ private fun StylePanel(state: EditorState) {
                 }
             }
         }
-        if (l.kind == LayerKind.TEXT || l.kind == LayerKind.RECT) {
+        if (l.kind == LayerKind.TEXT || l.kind == LayerKind.RECT || l.kind.isImage) {
             LabeledSlider("סיבוב", l.rotation, -180f..180f, state, 5) { v -> state.updateLayer(l.id) { it.copy(rotation = v) } }
         }
         if (l.kind == LayerKind.TIME || l.kind == LayerKind.HANDS) {
@@ -408,6 +473,29 @@ private fun StylePanel(state: EditorState) {
     HorizontalDivider()
     Spacer(Modifier.height(14.dp))
     Swatches("רקע", Backgrounds, state.doc.background, 7) { c -> state.edit { it.copy(background = c) } }
+}
+
+@Composable
+private fun IconPicker(selected: String, onPick: (String) -> Unit) {
+    var cat by rememberSaveable { mutableIntStateOf(0) }
+    Column(Modifier.enter(1).padding(bottom = 10.dp)) {
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            IconLibrary.categories.forEachIndexed { i, (name, _) -> FilterChip(cat == i, { cat = i }, { Text(name) }) }
+        }
+        Spacer(Modifier.height(6.dp))
+        IconLibrary.categories[cat].second.chunked(6).forEach { row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                row.forEach { (name, v) ->
+                    val bgc by animateColorAsState(if (name == selected) Violet.copy(alpha = .35f) else MaterialTheme.colorScheme.surfaceVariant, label = "ic")
+                    Box(
+                        Modifier.weight(1f).aspectRatio(1f).padding(vertical = 3.dp).clip(RoundedCornerShape(12.dp)).background(bgc).clickable { onPick(name) },
+                        contentAlignment = Alignment.Center,
+                    ) { Icon(v, name) }
+                }
+                repeat(6 - row.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+    }
 }
 
 private fun withAlpha(c: Long, a: Float): Long = ((a * 255).toLong().coerceIn(0, 255) shl 24) or (c and 0xFFFFFF)

@@ -40,6 +40,8 @@ android {
             // No code at all: minify strips the dex, which Watch Face Push requires.
             isMinifyEnabled = true
             isShrinkResources = false
+            // Keep PNGs byte-identical: the phone finds image slots (custom flavor) by their "pfslot" tEXt chunk.
+            isCrunchPngs = false
         }
     }
 }

@@ -53,10 +53,13 @@ class EditorState(context: Context) {
         save()
     }
 
-    fun add(kind: LayerKind, accent: Long) {
-        val layer = Layer.create(kind, doc.nextId, accent)
-        edit { it.copy(layers = it.layers + layer) }
-        selectedId = layer.id
+    fun add(kind: LayerKind, accent: Long) = add(Layer.create(kind, doc.nextId, accent))
+
+    /** Adds [layer] on top (its id is replaced with a fresh one) and selects it. */
+    fun add(layer: Layer) {
+        val l = layer.copy(id = doc.nextId)
+        edit { it.copy(layers = it.layers + l) }
+        selectedId = l.id
     }
 
     fun delete(id: Long) {

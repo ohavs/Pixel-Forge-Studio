@@ -10,7 +10,8 @@ import kotlin.math.roundToInt
 const val FACE_SIZE = 450f
 
 enum class LayerKind(val title: String) {
-    TIME("שעה"), DATE("תאריך"), TEXT("טקסט"), RING("טבעת"), ARC("קשת"), TICKS("סימונים"), HANDS("מחוגים"), CIRCLE("עיגול"), RECT("מלבן");
+    TIME("שעה"), DATE("תאריך"), TEXT("טקסט"), RING("טבעת"), ARC("קשת"), TICKS("סימונים"), HANDS("מחוגים"), CIRCLE("עיגול"), RECT("מלבן"), ICON("אייקון"), IMAGE("תמונה");
+    val isImage get() = this == ICON || this == IMAGE
     val isText get() = this == TIME || this == DATE || this == TEXT
 }
 
@@ -21,7 +22,9 @@ enum class LayerKind(val title: String) {
  * clockwise from 12 o'clock) and [height] sweep. TICKS: [count] marks of length [height]
  * ending at radius [size]. HANDS: minute hand of length [size] and width [thickness], [color2]
  * the second hand. Colors are ARGB (alpha = opacity); [color2] != 0 makes shapes a gradient.
- * [extra]: seconds for TIME, a second hand for HANDS. [rotation] turns RECT and TEXT.
+ * [extra]: seconds for TIME, a second hand for HANDS. [rotation] turns RECT, TEXT and images.
+ * ICON: [text] is the icon name, [size] its side. IMAGE: [text] is the picture's file name,
+ * [size] x [height] its box and [thickness] the corner radius. Both go to image slots on the watch.
  */
 data class Layer(
     val id: Long,
@@ -42,7 +45,7 @@ data class Layer(
     val visible: Boolean = true,
     val locked: Boolean = false,
 ) {
-    val name get() = if (kind == LayerKind.TEXT && text.isNotBlank()) text else kind.title
+    val name get() = if ((kind == LayerKind.TEXT || kind == LayerKind.ICON) && text.isNotBlank()) text else kind.title
 
     /** Approximate box size (w, h) for text kinds; real for shapes. */
     fun box(): Pair<Float, Float> = when (kind) {
@@ -50,7 +53,8 @@ data class Layer(
         LayerKind.DATE -> size * 0.62f * 10 to size * 1.3f
         LayerKind.TEXT -> (size * 0.62f * text.length.coerceAtLeast(1) + size * .4f) to size * 1.3f
         LayerKind.RING, LayerKind.ARC, LayerKind.TICKS, LayerKind.HANDS, LayerKind.CIRCLE -> size * 2 to size * 2
-        LayerKind.RECT -> size to height
+        LayerKind.RECT, LayerKind.IMAGE -> size to height
+        LayerKind.ICON -> size to size
     }
 
     fun hit(px: Float, py: Float): Boolean = when (kind) {
@@ -88,6 +92,8 @@ data class Layer(
             LayerKind.HANDS -> Layer(id, kind, size = 170f, thickness = 10f, color2 = accent, extra = true)
             LayerKind.CIRCLE -> Layer(id, kind, y = 340f, size = 22f, color = accent)
             LayerKind.RECT -> Layer(id, kind, y = 340f, size = 140f, height = 44f, thickness = 22f, color = accent)
+            LayerKind.ICON -> Layer(id, kind, y = 120f, size = 56f, text = "Favorite", color = accent)
+            LayerKind.IMAGE -> Layer(id, kind, size = 200f, height = 200f, thickness = 100f)
         }
     }
 }
@@ -119,19 +125,27 @@ data class FaceDoc(val background: Long = 0xFF0E1015, val layers: List<Layer> = 
 
 /** Turns a [FaceDoc] into Watch Face Format v1 XML. */
 object FaceXml {
+    /** Number of image slots baked into the template APK (watchface/src/custom/res/drawable-nodpi). */
+    const val SLOTS = 24
+
+    /** Layers that need a picture on the watch, in slot order. */
+    fun imageLayers(doc: FaceDoc) = doc.layers.filter { it.visible && it.kind.isImage }.take(SLOTS)
+
     fun build(doc: FaceDoc): String = buildString {
+        val slots = imageLayers(doc).withIndex().associate { (i, l) -> l.id to i }
         appendLine("""<?xml version="1.0" encoding="utf-8"?>""")
         appendLine("""<WatchFace width="450" height="450" clipShape="CIRCLE">""")
         val analog = doc.layers.any { it.visible && it.kind == LayerKind.HANDS }
         appendLine("""  <Metadata key="CLOCK_TYPE" value="${if (analog) "ANALOG" else "DIGITAL"}"/>""")
         appendLine("""  <Scene backgroundColor="${c(doc.background)}">""")
         appendLine("""    <Variant mode="AMBIENT" target="backgroundColor" value="#ff000000"/>""")
-        doc.layers.filter { it.visible }.forEachIndexed { i, l -> append(layer(l, "l$i")) }
+        doc.layers.filter { it.visible && (!it.kind.isImage || it.id in slots) }
+            .forEachIndexed { i, l -> append(layer(l, "l$i", slots[l.id] ?: 0)) }
         appendLine("  </Scene>")
         appendLine("</WatchFace>")
     }
 
-    private fun layer(l: Layer, name: String): String {
+    private fun layer(l: Layer, name: String, slot: Int): String {
         val (w, h) = l.box()
         val bx = (l.x - w / 2).i; val by = (l.y - h / 2).i
         val font = """<Font family="SYNC_TO_DEVICE" size="${l.size.i}" weight="${Weights[l.weight.coerceIn(Weights.indices)]}" slant="NORMAL" color="${c(l.color)}">"""
@@ -202,6 +216,11 @@ object FaceXml {
         ${fill(l, w, h)}
       </Ellipse>
     </PartDraw>
+"""
+            LayerKind.ICON, LayerKind.IMAGE -> """
+    <PartImage x="$bx" y="$by" width="${w.i}" height="${h.i}" angle="${l.rotation.i}" name="$name">
+      <Image resource="slot_$slot"/>
+    </PartImage>
 """
             LayerKind.RECT -> """
     <PartDraw x="$bx" y="$by" width="${w.i}" height="${h.i}" angle="${l.rotation.i}" name="$name">
@@ -298,6 +317,14 @@ object Presets {
             l(LayerKind.CIRCLE, 0xFF6C5CE7) { copy(y = 225f, size = 225f, color2 = 0xFFFF3D8B) },
             l(LayerKind.TIME, 0xFFFFFFFF) { copy(size = 100f) },
             l(LayerKind.DATE, 0xCCFFFFFF) { copy(y = 295f, size = 24f) },
+        ),
+        "Weather" to face(
+            0xFF101C33,
+            l(LayerKind.ARC, 0xFF1E3358) { copy(size = 205f, thickness = 10f, angle = 0f, height = 360f) },
+            l(LayerKind.ARC, 0xFFFFD166) { copy(size = 205f, thickness = 10f, angle = 270f, height = 140f, color2 = 0xFFFF7A59) },
+            l(LayerKind.ICON, 0xFFFFD166) { copy(y = 115f, size = 64f, text = "WbSunny") },
+            l(LayerKind.TIME, 0xFFFFFFFF) { copy(y = 225f, size = 96f) },
+            l(LayerKind.DATE, 0xFF8FB3FF) { copy(y = 310f, size = 24f) },
         ),
         "Sunset" to face(
             0xFF101C33,

@@ -33,19 +33,23 @@ object FaceBuilder {
         return BuiltFace(apk, context.assets.open("${TEMPLATE}_token.txt").bufferedReader().readText().trim())
     }
 
-    fun build(context: Context, faceXml: String): BuiltFace {
+    /** [images] fill the template's image slots in order (slot_0, slot_1, …). */
+    fun build(context: Context, faceXml: String, images: List<ByteArray> = emptyList()): BuiltFace {
         val template = template(context).apk
         val unsigned = File(context.cacheDir, "face-unsigned.apk")
         val signed = File(context.cacheDir, "face.apk")
-        replaceFaceXml(template, unsigned, faceXml.toByteArray())
+        replaceFaceXml(template, unsigned, faceXml.toByteArray(), images)
         sign(unsigned, signed)
         val result = DwfValidatorFactory.create().validate(signed, context.packageName)
         check(result.failures().isEmpty()) { result.failures().joinToString("\n") { it.failureMessage() } }
         return BuiltFace(signed, result.validationToken())
     }
 
-    /** Copies the template, dropping old signatures and replacing the raw resource that holds the face XML. */
-    private fun replaceFaceXml(template: File, out: File, xml: ByteArray) {
+    /**
+     * Copies the template, dropping old signatures and replacing the raw resource that holds the
+     * face XML and the slot PNGs (found by content: AGP shortens resource paths).
+     */
+    private fun replaceFaceXml(template: File, out: File, xml: ByteArray, images: List<ByteArray>) {
         ZipFile(template).use { zip ->
             ZipOutputStream(out.outputStream()).use { zos ->
                 var replaced = false
@@ -54,6 +58,8 @@ object FaceBuilder {
                     var bytes = zip.getInputStream(entry).use { it.readBytes() }
                     if (entry.name.startsWith("res/") && String(bytes.copyOf(minOf(bytes.size, 300))).contains("<WatchFace")) {
                         bytes = xml; replaced = true
+                    } else if (entry.name.startsWith("res/")) {
+                        slotOf(bytes)?.let { images.getOrNull(it) }?.let { bytes = it }
                     }
                     val e = ZipEntry(entry.name).apply { method = entry.method }
                     if (entry.method == ZipEntry.STORED) {
@@ -65,6 +71,14 @@ object FaceBuilder {
                 check(replaced) { "watchface.xml not found in template" }
             }
         }
+    }
+
+    /** Slot number from the template PNG's "pfslot" tEXt chunk, or null for any other file. */
+    private fun slotOf(bytes: ByteArray): Int? {
+        if (bytes.size > 400) return null
+        val s = String(bytes, Charsets.ISO_8859_1)
+        val i = s.indexOf("pfslot\u0000").takeIf { it >= 0 } ?: return null
+        return s.substring(i + 7, i + 9).toIntOrNull()
     }
 
     /** Signs (v2) with a stable per-device key, so later builds can update the same slot. */
